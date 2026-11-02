@@ -64,6 +64,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
     val providerOptions = listOf(
         "OpenAI-compatible" to "https://api.openai.com/v1",
         "OpenRouter" to "https://openrouter.ai/api/v1",
+        "FreeModel" to "https://freemodel.in/v1",
         "LiteLLM" to "http://localhost:4000/v1",
         "Ollama" to "http://localhost:11434/v1",
         "FreeLLMAPI" to ""

@@ -194,6 +194,8 @@ fun HubApp() {
                             label = { Text(if (isArabic) "الشبكات" else "Providers") },
                             icon = { Text("◎") }
                         )
+                        NavigationBarItem(selected = selectedTab == 4, onClick = { selectedTab = 4 }, label = { Text("GitHub") }, icon = { Text("⌘") })
+                        NavigationBarItem(selected = selectedTab == 5, onClick = { selectedTab = 5 }, label = { Text(if (isArabic) "التشغيل" else "Runtime") }, icon = { Text("▶") })
                     }
                 }
             }
@@ -276,6 +278,10 @@ fun HubApp() {
                             }
                         }
                     }
+                } else if (selectedTab == 4) {
+                    item { GitHubAgentScreen(isArabic = isArabic) }
+                } else if (selectedTab == 5) {
+                    item { RuntimeCenterScreen(isArabic = isArabic) }
                 } else {
                     item {
                         Text(if (isArabic) "شبكات ومزوّدو الخدمات الخارجية" else "External AI provider networks",

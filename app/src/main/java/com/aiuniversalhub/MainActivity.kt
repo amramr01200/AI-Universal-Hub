@@ -13,6 +13,7 @@ import com.aiuniversalhub.runtime.RuntimeCenterScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -144,10 +145,11 @@ fun HubApp() {
                         ChatHomeScreen(isArabic = isArabic)
                     }
                 }
-            } else LazyColumn(
-                modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            } else SelectionContainer {
+                LazyColumn(
+                    modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                 if (selectedTab == 1) {
                     item {
                         Text(if (isArabic) "مركز الأدوات" else "Tools Center", style = MaterialTheme.typography.headlineSmall)
@@ -194,6 +196,7 @@ fun HubApp() {
                 } else {
                     item { ToolLibraryScreen(isArabic = isArabic) }
                     item { RuntimeCenterScreen(isArabic = isArabic) }
+                }
                 }
             }
         }

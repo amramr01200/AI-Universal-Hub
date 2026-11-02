@@ -15,6 +15,7 @@ class TermuxResultReceiver : BroadcastReceiver() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
         prefs.edit()
             .putString("label", intent.getStringExtra(EXTRA_LABEL).orEmpty())
+            .putInt("conversation_id", intent.getIntExtra(EXTRA_CONVERSATION_ID, -1))
             .putString("stdout", result.getString(EXTRA_STDOUT).orEmpty())
             .putString("stderr", result.getString(EXTRA_STDERR).orEmpty())
             .putInt("exit_code", result.getInt(EXTRA_EXIT_CODE, -1))
@@ -28,6 +29,7 @@ class TermuxResultReceiver : BroadcastReceiver() {
 
     companion object {
         const val EXTRA_LABEL = "agent_label"
+        const val EXTRA_CONVERSATION_ID = "conversation_id"
         const val PREFS = "termux_bridge_results_secure"
         const val EXTRA_RESULT_BUNDLE = "result"
         const val EXTRA_STDOUT = "stdout"

@@ -179,6 +179,9 @@ fun HubApp() {
                         }) { Text(if (isArabic) "تحديث حالة الأدوات" else "Refresh tool status") }
                     }
                     if (message.isNotBlank()) item { Text(message, color = MaterialTheme.colorScheme.secondary) }
+                } else {
+                    item { ToolLibraryScreen(isArabic = isArabic) }
+                    item { RuntimeCenterScreen(isArabic = isArabic) }
                 }
             }
         }

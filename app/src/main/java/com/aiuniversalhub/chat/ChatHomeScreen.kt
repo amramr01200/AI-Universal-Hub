@@ -100,7 +100,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var newProviderKey by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf(store.getProviderUrl(initialProvider.first.lowercase().replace(" ", "-"), initialProvider.second)) }
     var apiKey by remember { mutableStateOf(store.getApiKey(initialProvider.first.lowercase().replace(" ", "-")) ?: "") }
-    var modelOptions by remember { mutableStateOf(emptyList<String>()) }
+    var modelOptions by remember { mutableStateOf(store.getModels(initialProvider.first.lowercase().replace(" ", "-"))) } }
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -263,6 +263,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                                 val raw = withContext(Dispatchers.IO) { client.listModels(baseUrl, apiKey) }
                                 val found = client.parseModelIds(raw)
                                 modelOptions = found
+                                store.saveModels(providerName.lowercase().replace(" ", "-"), found)
                                 if (found.isNotEmpty() && selectedModel !in found) updateSelectedModel(found.first())
                                 status = if (found.isEmpty()) (if (isArabic) "المزود لم يرجع نماذج." else "No models returned.") else (if (isArabic) "تم تحميل ${found.size} نموذج" else "Loaded ${found.size} models")
                             } catch (e: Exception) { status = e.message ?: "Connection failed" }
@@ -403,7 +404,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                                     val id = option.first.lowercase().replace(" ", "-")
                                     baseUrl = store.getProviderUrl(id, option.second)
                                     apiKey = store.getApiKey(id) ?: ""
-                                    modelOptions = emptyList()
+                                    modelOptions = store.getModels(id)
                                     providerExpanded = false
                                 })
                             }

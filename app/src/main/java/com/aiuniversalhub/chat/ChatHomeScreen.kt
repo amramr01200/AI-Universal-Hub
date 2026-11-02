@@ -94,7 +94,7 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSettingsConsumed: () -> Unit = {}, topSelectedModel: String = "", onTopModelSelected: (String) -> Unit = {}, onTopModelOptionsChanged: (String, List<String>) -> Unit = { _, _ -> }) {
+fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSettingsConsumed: () -> Unit = {}, topSelectedModel: String = "", onTopModelSelected: (String) -> Unit = {}, onTopModelOptionsChanged: (String, List<String>) -> Unit = { _, _ -> }, onTopTokenCountChanged: (String) -> Unit = {}) {
     val context = LocalContext.current
     val store = remember { SecureStore(context) }
     val client = remember { AiClient() }
@@ -168,6 +168,10 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     val selectedModel = selected.model
 
     LaunchedEffect(selectedModel, modelOptions) { onTopModelOptionsChanged(selectedModel, modelOptions) }
+    LaunchedEffect(selected.messages) {
+        val estimatedTokens = selected.messages.sumOf { it.content.length }.let { (it + 3) / 4 }
+        onTopTokenCountChanged(estimatedTokens.toString())
+    }
     LaunchedEffect(topSelectedModel, selectedId, modelOptions) {
         if (topSelectedModel.isNotBlank() && topSelectedModel != selected.model && topSelectedModel in modelOptions) {
             threads = threads.map { if (it.id == selectedId) it.copy(model = topSelectedModel) else it }

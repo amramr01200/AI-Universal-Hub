@@ -83,14 +83,30 @@ class AiClient {
         }
     }
 
-    fun chatWithImage(baseUrl: String, apiKey: String, model: String, message: String, mimeType: String, imageBase64: String): String {
+    fun chatWithImage(baseUrl: String, apiKey: String, model: String, message: String, mimeType: String, imageBase64: String): String =
+        chatWithImageHistory(baseUrl, apiKey, model, emptyList(), message, mimeType, imageBase64)
+
+    fun chatWithImageHistory(
+        baseUrl: String,
+        apiKey: String,
+        model: String,
+        history: List<Pair<String, String>>,
+        message: String,
+        mimeType: String,
+        imageBase64: String
+    ): String {
         require(model.isNotBlank()) { "Select a model before sending a message." }
+        val jsonMessages = JSONArray()
+        history.forEach { (role, content) ->
+            if (role == "system" || role == "user" || role == "assistant") {
+                jsonMessages.put(JSONObject().put("role", role).put("content", content))
+            }
+        }
         val content = JSONArray()
             .put(JSONObject().put("type", "text").put("text", message.ifBlank { "Describe this image." }))
             .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:$mimeType;base64,$imageBase64")))
-        val payload = JSONObject().put("model", model).put(
-            "messages", JSONArray().put(JSONObject().put("role", "user").put("content", content))
-        )
+        jsonMessages.put(JSONObject().put("role", "user").put("content", content))
+        val payload = JSONObject().put("model", model).put("messages", jsonMessages)
         val request = requestBuilder(baseUrl, apiKey, "/chat/completions")
             .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
         http.newCall(request).execute().use { response ->

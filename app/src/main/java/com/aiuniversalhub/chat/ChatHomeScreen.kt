@@ -85,9 +85,12 @@ fun ChatHomeScreen(isArabic: Boolean) {
         Triple("Ollama", "http://localhost:11434/v1", false),
         Triple("FreeLLMAPI", "", true)
     )
-    var providerName by remember { mutableStateOf("OpenAI-compatible") }
-    var baseUrl by remember { mutableStateOf(store.getProviderUrl("openai-compatible", "https://api.openai.com/v1")) }
-    var apiKey by remember { mutableStateOf(store.getApiKey("openai-compatible") ?: "") }
+    val initialProvider = providerOptions.firstOrNull {
+        it.first.lowercase().replace(" ", "-") == store.getSelectedProvider()
+    } ?: providerOptions.first()
+    var providerName by remember { mutableStateOf(initialProvider.first) }
+    var baseUrl by remember { mutableStateOf(store.getProviderUrl(initialProvider.first.lowercase().replace(" ", "-"), initialProvider.second)) }
+    var apiKey by remember { mutableStateOf(store.getApiKey(initialProvider.first.lowercase().replace(" ", "-")) ?: "") }
     var modelOptions by remember { mutableStateOf(emptyList<String>()) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -237,7 +240,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
         HorizontalDivider()
         Text(selected.title, style = MaterialTheme.typography.titleMedium)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(messages = selected.messages) { msg ->
+            items(selected.messages) { msg ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = if (msg.role == "user") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)

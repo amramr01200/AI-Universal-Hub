@@ -10,6 +10,7 @@ import com.aiuniversalhub.background.BackgroundTaskService
 import com.aiuniversalhub.chat.ChatHomeScreen
 import com.aiuniversalhub.registry.ToolLibraryScreen
 import com.aiuniversalhub.integrations.McpHttpClient
+import com.aiuniversalhub.data.SecureStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,6 +75,7 @@ private fun isPackageInstalled(context: android.content.Context, packageName: St
 @Composable
 fun HubApp() {
     val context = LocalContext.current
+    val secureStore = remember { SecureStore(context) }
     var isArabic by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var termuxInstalled by remember { mutableStateOf(isPackageInstalled(context, "com.termux")) }
@@ -284,8 +286,8 @@ fun HubApp() {
                                 "للتوصيل: شغّلي Ollama على جهاز أو خادم يمكن للهاتف الوصول إليه، ثم استخدمي عنوان OpenAI-compatible مثل http://HOST:11434/v1 من إعدادات مزود الذكاء الاصطناعي. localhost على الهاتف لن يشير تلقائيًا إلى جهاز الكمبيوتر."
                                 else "Connect an Ollama host reachable from this phone, then use its OpenAI-compatible endpoint (for example http://HOST:11434/v1) in AI provider settings. Phone localhost does not point to your computer.")
                             "mcp" -> {
-                                var endpoint by remember { mutableStateOf(context.getSharedPreferences("hub_mcp", 0).getString("endpoint", "") ?: "") }
-                                var token by remember { mutableStateOf(context.getSharedPreferences("hub_mcp", 0).getString("token", "") ?: "") }
+                                var endpoint by remember { mutableStateOf(secureStore.getProviderUrl("mcp-server")) }
+                                var token by remember { mutableStateOf(secureStore.getApiKey("mcp-server").orEmpty()) }
                                 var mcpTools by remember { mutableStateOf(emptyList<String>()) }
                                 var mcpStatus by remember { mutableStateOf("") }
                                 var mcpBusy by remember { mutableStateOf(false) }
@@ -295,7 +297,8 @@ fun HubApp() {
                                 Button(enabled = !mcpBusy && endpoint.isNotBlank(), onClick = {
                                     mcpBusy = true
                                     mcpStatus = ""
-                                    context.getSharedPreferences("hub_mcp", 0).edit().putString("endpoint", endpoint.trim()).putString("token", token.trim()).apply()
+                                    secureStore.saveProviderUrl("mcp-server", endpoint.trim())
+                                    if (token.isBlank()) secureStore.deleteApiKey("mcp-server") else secureStore.saveApiKey("mcp-server", token.trim())
                                     mcpScope.launch {
                                         try {
                                             val found = withContext(Dispatchers.IO) {

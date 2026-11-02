@@ -117,6 +117,7 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         Triple("Mistral AI", "https://api.mistral.ai/v1", true),
         Triple("Together AI", "https://api.together.xyz/v1", true),
         Triple("FreeModel", "https://freemodel.in/v1", true),
+        Triple("AIMLAPI", "https://api.aimlapi.com/v1", true),
         Triple("LiteLLM", "http://localhost:4000/v1", true),
         Triple("Ollama", "http://localhost:11434/v1", false),
         Triple("FreeLLMAPI", "", true)
@@ -470,7 +471,8 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                             Triple("Groq", "https://api.groq.com/openai/v1", "https://console.groq.com/docs/models|https://console.groq.com/keys"),
                             Triple("DeepSeek", "https://api.deepseek.com/v1", "https://api-docs.deepseek.com/|https://platform.deepseek.com/api_keys"),
                             Triple("Mistral AI", "https://api.mistral.ai/v1", "https://docs.mistral.ai/getting-started/models/|https://console.mistral.ai/api-keys/"),
-                            Triple("Together AI", "https://api.together.xyz/v1", "https://www.together.ai/models|https://api.together.ai/settings/api-keys")
+                            Triple("Together AI", "https://api.together.xyz/v1", "https://www.together.ai/models|https://api.together.ai/settings/api-keys"),
+                            Triple("AIMLAPI", "https://api.aimlapi.com/v1", "https://docs.aimlapi.com/|https://aimlapi.com/app/onboarding?returnTo=/keys?from=get-api-key")
                         )
                         networkProviders.forEach { entry ->
                             val links = entry.third.split("|")

@@ -100,7 +100,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var newProviderKey by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf(store.getProviderUrl(initialProvider.first.lowercase().replace(" ", "-"), initialProvider.second)) }
     var apiKey by remember { mutableStateOf(store.getApiKey(initialProvider.first.lowercase().replace(" ", "-")) ?: "") }
-    var modelOptions by remember { mutableStateOf(store.getModels(initialProvider.first.lowercase().replace(" ", "-"))) } }
+    var modelOptions by remember { mutableStateOf(store.getModels(initialProvider.first.lowercase().replace(" ", "-"))) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }

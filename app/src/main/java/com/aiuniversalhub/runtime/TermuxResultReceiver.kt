@@ -25,11 +25,11 @@ class TermuxResultReceiver : BroadcastReceiver() {
         const val ACTION_RESULT = "com.aiuniversalhub.runtime.TERMUX_RESULT"
         const val EXTRA_LABEL = "agent_label"
         const val PREFS = "termux_bridge_results"
-        const val EXTRA_RESULT_BUNDLE = "com.termux.util.TERMINAL_PLUGIN_RESULT_BUNDLE"
-        const val EXTRA_STDOUT = "com.termux.util.TERMINAL_PLUGIN_RESULT_BUNDLE_STDOUT"
-        const val EXTRA_STDERR = "com.termux.util.TERMINAL_PLUGIN_RESULT_BUNDLE_STDERR"
-        const val EXTRA_EXIT_CODE = "com.termux.util.TERMINAL_PLUGIN_RESULT_BUNDLE_EXIT_CODE"
-        const val EXTRA_ERROR = "com.termux.util.TERMINAL_PLUGIN_RESULT_BUNDLE_ERR"
-        const val EXTRA_ERROR_MESSAGE = "com.termux.util.TERMINAL_PLUGIN_RESULT_BUNDLE_ERRMSG"
+        const val EXTRA_RESULT_BUNDLE = "result"
+        const val EXTRA_STDOUT = "stdout"
+        const val EXTRA_STDERR = "stderr"
+        const val EXTRA_EXIT_CODE = "exitCode"
+        const val EXTRA_ERROR = "err"
+        const val EXTRA_ERROR_MESSAGE = "errmsg"
     }
 }

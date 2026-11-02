@@ -90,4 +90,35 @@ class GitHubApiClient(private val token: String) {
             .put(body.toString().toRequestBody("application/json".toMediaType())).build()
         return JSONObject(execute(request)).optJSONObject("commit")?.optString("sha").orEmpty()
     }
+
+    /** Creates a branch from a verified source branch. */
+    fun createBranch(owner: String, repo: String, newBranch: String, sourceBranch: String): String {
+        require(newBranch.isNotBlank() && sourceBranch.isNotBlank())
+        val source = JSONObject(execute(request("/repos/$owner/$repo/git/ref/heads/" + java.net.URLEncoder.encode(sourceBranch, "UTF-8").replace("+", "%20")).get().build()))
+        val sha = source.optJSONObject("object")?.optString("sha").orEmpty()
+        require(sha.isNotBlank()) { "Could not resolve source branch commit." }
+        val body = JSONObject().put("ref", "refs/heads/$newBranch").put("sha", sha)
+        val call = request("/repos/$owner/$repo/git/refs")
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        return JSONObject(execute(call)).optString("ref")
+    }
+
+    /** Opens a pull request after the caller has reviewed the proposed branches. */
+    fun createPullRequest(owner: String, repo: String, title: String, head: String, base: String, bodyText: String = ""): String {
+        require(title.isNotBlank() && head.isNotBlank() && base.isNotBlank())
+        require(head != base) { "Head and base branches must differ." }
+        val body = JSONObject().put("title", title).put("head", head).put("base", base).put("body", bodyText)
+        val call = request("/repos/$owner/$repo/pulls")
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        return JSONObject(execute(call)).optString("html_url")
+    }
+
+    /** Submits a pull-request review; event must be APPROVE, REQUEST_CHANGES, or COMMENT. */
+    fun submitPullRequestReview(owner: String, repo: String, number: Int, bodyText: String, event: String): String {
+        require(number > 0 && event in setOf("APPROVE", "REQUEST_CHANGES", "COMMENT"))
+        val body = JSONObject().put("body", bodyText).put("event", event)
+        val call = request("/repos/$owner/$repo/pulls/$number/reviews")
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        return JSONObject(execute(call)).optString("html_url")
+    }
 }

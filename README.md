@@ -35,3 +35,12 @@ Planned architecture:
 - Explain that Android may stop or delay work under force-stop, severe battery restrictions, reboot, or OEM policies; the app must report interruptions and resume safely when allowed rather than promise unlimited execution.
 
 This capability is a core requirement and must be tested with screen-off, app-switched, network-loss, process-recreation, and task-cancellation scenarios before release.
+
+
+## In-app tool and model library
+
+The app now includes a local persistent library for user-registered tools and models. Each entry stores its name, type, launch URL, notes/settings, status label, and last-updated timestamp in app-private SharedPreferences. Entries can be opened by URL or removed from the library.
+
+Important distinction: adding an entry registers metadata; it does not install or sandbox an arbitrary third-party package. Actual installation and in-app execution require a compatible, reviewed adapter (for example an HTTP API, MCP client, or explicitly configured Termux bridge). The library is the management surface for those adapters, not a claim that every Linux/Termux tool can run natively inside Android.
+
+The foreground service added in this milestone is an execution shell and notification control only. WorkManager is included as a dependency, but durable task orchestration, checkpoint recovery, per-tool adapters, and real background project generation remain future implementation work.

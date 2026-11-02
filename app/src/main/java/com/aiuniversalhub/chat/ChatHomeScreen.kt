@@ -15,7 +15,8 @@ import com.aiuniversalhub.net.AiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject\nimport org.json.JSONArray
+import org.json.JSONObject
+import org.json.JSONArray
 
 private data class ChatMessage(val role: String, val content: String)
 private data class ChatThread(val id: Int, val title: String, val messages: List<ChatMessage> = emptyList())
@@ -215,7 +216,8 @@ fun ChatHomeScreen(isArabic: Boolean) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val keyId = providerName.lowercase().replace(" ", "-")\n                    if (apiKey.isNotBlank()) store.saveApiKey(keyId, apiKey.trim()) else store.deleteApiKey(keyId)
+                    val keyId = providerName.lowercase().replace(" ", "-")
+                    if (apiKey.isNotBlank()) store.saveApiKey(keyId, apiKey.trim()) else store.deleteApiKey(keyId)
                     showSettings = false
                     status = if (isArabic) "تم حفظ إعدادات المزود على الجهاز." else "Provider settings saved on this device."
                 }) { Text(if (isArabic) "حفظ" else "Save") }

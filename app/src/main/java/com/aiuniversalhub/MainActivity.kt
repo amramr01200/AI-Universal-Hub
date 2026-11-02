@@ -8,14 +8,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-data class ToolItem(val name: String, val detail: String, val status: String)
+private data class ToolCard(
+    val id: String,
+    val name: String,
+    val descriptionEn: String,
+    val descriptionAr: String,
+    val stateEn: String,
+    val stateAr: String,
+    val installUrl: String? = null
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,68 +31,143 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun isPackageInstalled(context: android.content.Context, packageName: String): Boolean {
+    return try {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(packageName, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HubApp() {
     val context = LocalContext.current
-    var tab by remember { mutableStateOf(0) }
-    var termuxInstalled by remember {
-        mutableStateOf(runCatching {
-            context.packageManager.getPackageInfo("com.termux", PackageManager.PackageInfoFlags.of(0))
-        }.isSuccess)
-    }
+    var isArabic by remember { mutableStateOf(true) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var termuxInstalled by remember { mutableStateOf(isPackageInstalled(context, "com.termux")) }
+    var message by remember { mutableStateOf("") }
+
     val tools = listOf(
-        ToolItem("Termux", "Local Android command environment", if (termuxInstalled) "Detected" else "Not installed"),
-        ToolItem("Ollama", "Local model runtime · requires compatible host/runtime", "Not connected"),
-        ToolItem("MCP", "Connect external tool servers", "Coming next"),
-        ToolItem("LiteLLM", "Unified provider gateway", "Coming next")
+        ToolCard("termux", "Termux", "Android terminal environment", "بيئة أوامر محلية على أندرويد",
+            if (termuxInstalled) "Installed" else "Not installed",
+            if (termuxInstalled) "مثبّت" else "غير مثبّت",
+            "https://f-droid.org/packages/com.termux/"),
+        ToolCard("ollama", "Ollama", "Local model runtime; needs a compatible device or host", "تشغيل نماذج محلية؛ يحتاج جهازًا أو مضيفًا متوافقًا",
+            "Not connected", "غير متصل"),
+        ToolCard("mcp", "MCP", "Connect approved external tool servers", "ربط خوادم الأدوات الخارجية بعد الموافقة",
+            "Integration planned", "التكامل قيد التطوير"),
+        ToolCard("litellm", "LiteLLM", "Unified gateway for supported AI providers", "بوابة موحدة لمزودي الذكاء الاصطناعي",
+            "Integration planned", "التكامل قيد التطوير")
     )
+
     MaterialTheme {
-        Scaffold(topBar = {
-            TopAppBar(title = { Text("AI Universal Hub") }, actions = {
-                TextButton(onClick = { tab = 0 }) { Text("العربية / EN") }
-            })
-        }, bottomBar = {
-            NavigationBar {
-                NavigationBarItem(selected = tab == 0, onClick = { tab = 0 }, label = { Text("Home") }, icon = {})
-                NavigationBarItem(selected = tab == 1, onClick = { tab = 1 }, label = { Text("Tools") }, icon = {})
-            }
-        }) { padding ->
-            LazyColumn(Modifier.padding(padding).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (tab == 0) {
-                    item { Text("Your AI workspace", style = MaterialTheme.typography.headlineSmall) }
-                    item { Text("One place to manage models, providers and tools.") }
-                    item { Card { Column(Modifier.padding(16.dp)) {
-                        Text("Foundation status", style = MaterialTheme.typography.titleMedium)
-                        Text("App shell ready · provider and chat modules are next")
-                    } } }
-                    item { Button(onClick = { tab = 1 }) { Text("Open Tools Center") } }
-                } else {
-                    item { Text("Tools Center", style = MaterialTheme.typography.headlineSmall) }
-                    item { Text("Discover and manage compatible tools. Installation requires explicit permission.") }
-                    items(tools) { tool ->
-                        Card { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(tool.name, style = MaterialTheme.typography.titleMedium)
-                            Text(tool.detail, style = MaterialTheme.typography.bodyMedium)
-                            Text(tool.status, color = MaterialTheme.colorScheme.primary)
-                            if (tool.name == "Termux" && termuxInstalled) {
-                                Button(onClick = {
-                                    val launch = context.packageManager.getLaunchIntentForPackage("com.termux")
-                                    if (launch != null) context.startActivity(launch)
-                                }) { Text("Open Termux") }
-                            } else if (tool.name == "Termux") {
-                                OutlinedButton(onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://f-droid.org/packages/com.termux/"))
-                                    context.startActivity(intent)
-                                }) { Text("Termux information") }
-                            }
-                        } }
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("AI Universal Hub") },
+                    actions = {
+                        TextButton(onClick = { isArabic = !isArabic }) {
+                            Text(if (isArabic) "English" else "العربية")
+                        }
                     }
-                    item { OutlinedButton(onClick = {
-                        termuxInstalled = runCatching {
-                            context.packageManager.getPackageInfo("com.termux", PackageManager.PackageInfoFlags.of(0))
-                        }.isSuccess
-                    }) { Text("Refresh detection") } }
+                )
+            },
+            bottomBar = {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        label = { Text(if (isArabic) "الرئيسية" else "Home") },
+                        icon = { Text("⌂") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        label = { Text(if (isArabic) "الأدوات" else "Tools") },
+                        icon = { Text("⚙") }
+                    )
+                }
+            }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (selectedTab == 0) {
+                    item {
+                        Text(
+                            if (isArabic) "مساحة الذكاء الاصطناعي الخاصة بك" else "Your AI workspace",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                    }
+                    item {
+                        Text(
+                            if (isArabic) "إدارة النماذج والمزودين والأدوات من مكان واحد." else "Manage models, providers and tools in one place."
+                        )
+                    }
+                    item {
+                        Card {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(if (isArabic) "حالة المنصة" else "Platform status", style = MaterialTheme.typography.titleMedium)
+                                Text(if (isArabic) "الهيكل الأساسي ومركز الأدوات جاهزان للتطوير." else "App foundation and tools catalog are ready for the next integrations.")
+                                Text(if (isArabic) "Termux: " + if (termuxInstalled) "مثبّت" else "غير مثبّت" else "Termux: " + if (termuxInstalled) "Installed" else "Not installed")
+                            }
+                        }
+                    }
+                    item {
+                        Button(onClick = { selectedTab = 1 }) {
+                            Text(if (isArabic) "فتح مركز الأدوات" else "Open Tools Center")
+                        }
+                    }
+                } else {
+                    item {
+                        Text(if (isArabic) "مركز الأدوات" else "Tools Center", style = MaterialTheme.typography.headlineSmall)
+                        Text(if (isArabic) "لن يتم تثبيت أو تشغيل أي أداة بصلاحيات خاصة دون موافقتك." else "No tool will be installed or granted special permissions without your approval.")
+                    }
+                    items(tools.size) { index ->
+                        val tool = tools[index]
+                        Card {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(tool.name, style = MaterialTheme.typography.titleLarge)
+                                Text(if (isArabic) tool.descriptionAr else tool.descriptionEn)
+                                Text(
+                                    (if (isArabic) "الحالة: " else "Status: ") + if (isArabic) tool.stateAr else tool.stateEn,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                when (tool.id) {
+                                    "termux" -> {
+                                        if (termuxInstalled) {
+                                            Button(onClick = {
+                                                val launch = context.packageManager.getLaunchIntentForPackage("com.termux")
+                                                if (launch != null) context.startActivity(launch)
+                                                else message = if (isArabic) "تعذر فتح Termux." else "Could not open Termux."
+                                            }) { Text(if (isArabic) "فتح Termux" else "Open Termux") }
+                                        } else {
+                                            OutlinedButton(onClick = {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(tool.installUrl)))
+                                            }) { Text(if (isArabic) "عرض صفحة التثبيت" else "Open install page") }
+                                        }
+                                    }
+                                    "ollama" -> OutlinedButton(onClick = {
+                                        message = if (isArabic) "سيتم إضافة فحص الاتصال المحلي في مرحلة لاحقة." else "Local runtime connection checks are planned for a later milestone."
+                                    }) { Text(if (isArabic) "تفاصيل الربط" else "Connection details") }
+                                    else -> OutlinedButton(onClick = {
+                                        message = if (isArabic) "التكامل قيد التطوير وسيظهر هنا عند جاهزيته." else "This integration is under development."
+                                    }) { Text(if (isArabic) "التفاصيل" else "Details") }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        OutlinedButton(onClick = {
+                            termuxInstalled = isPackageInstalled(context, "com.termux")
+                            message = if (isArabic) "تم تحديث حالة Termux." else "Termux status refreshed."
+                        }) { Text(if (isArabic) "تحديث حالة الأدوات" else "Refresh tool status") }
+                    }
+                    if (message.isNotBlank()) item { Text(message, color = MaterialTheme.colorScheme.secondary) }
                 }
             }
         }

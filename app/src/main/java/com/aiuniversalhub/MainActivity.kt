@@ -95,7 +95,8 @@ fun HubApp() {
         ToolCard("ollama", "Ollama", "Local model runtime; needs a compatible device or host", "تشغيل نماذج محلية؛ يحتاج جهازًا أو مضيفًا متوافقًا",
             "Not connected", "غير متصل"),
         ToolCard("mcp", "MCP", "Connect approved external tool servers", "ربط خوادم الأدوات الخارجية بعد الموافقة",
-            "Integration planned", "التكامل قيد التطوير"),
+            if (secureStore.getProviderUrl("mcp-server").isNotBlank()) "Configured" else "Ready to configure",
+            if (secureStore.getProviderUrl("mcp-server").isNotBlank()) "تم حفظ خادم" else "جاهز للإعداد"),
         ToolCard("litellm", "LiteLLM", "Unified gateway for supported AI providers", "بوابة موحدة لمزودي الذكاء الاصطناعي",
             "Integration planned", "التكامل قيد التطوير")
     )

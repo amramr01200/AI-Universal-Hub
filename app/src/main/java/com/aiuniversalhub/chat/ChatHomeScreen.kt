@@ -88,10 +88,16 @@ fun ChatHomeScreen(isArabic: Boolean) {
         Triple("Ollama", "http://localhost:11434/v1", false),
         Triple("FreeLLMAPI", "", true)
     )
-    val initialProvider = providerOptions.firstOrNull {
+    var registeredProviders by remember { mutableStateOf(store.listProviders()) }
+    val allProviderOptions = providerOptions + registeredProviders.map { Triple(it.name, it.baseUrl, true) }
+    val initialProvider = allProviderOptions.firstOrNull {
         it.first.lowercase().replace(" ", "-") == store.getSelectedProvider()
     } ?: providerOptions.first()
     var providerName by remember { mutableStateOf(initialProvider.first) }
+    var showAddProvider by remember { mutableStateOf(false) }
+    var newProviderName by remember { mutableStateOf("") }
+    var newProviderUrl by remember { mutableStateOf("") }
+    var newProviderKey by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf(store.getProviderUrl(initialProvider.first.lowercase().replace(" ", "-"), initialProvider.second)) }
     var apiKey by remember { mutableStateOf(store.getApiKey(initialProvider.first.lowercase().replace(" ", "-")) ?: "") }
     var modelOptions by remember { mutableStateOf(emptyList<String>()) }
@@ -391,7 +397,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                             modifier = Modifier.menuAnchor().fillMaxWidth(),
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerExpanded) })
                         ExposedDropdownMenu(expanded = providerExpanded, onDismissRequest = { providerExpanded = false }) {
-                            providerOptions.forEach { option ->
+                            allProviderOptions.forEach { option ->
                                 DropdownMenuItem(text = { Text(option.first) }, onClick = {
                                     providerName = option.first
                                     val id = option.first.lowercase().replace(" ", "-")
@@ -402,6 +408,39 @@ fun ChatHomeScreen(isArabic: Boolean) {
                                 })
                             }
                         }
+                    }
+                    if (registeredProviders.isNotEmpty()) {
+                        Text(if (isArabic) "المزودات المسجلة على الجهاز" else "Registered providers on this device",
+                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                        registeredProviders.forEach { saved ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(saved.name, modifier = Modifier.weight(1f),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f))
+                                TextButton(onClick = {
+                                    val replacement = store.deleteProvider(saved.id)
+                                    registeredProviders = store.listProviders()
+                                    if (providerName == saved.name) {
+                                        val next = registeredProviders.firstOrNull()
+                                        if (next != null) {
+                                            providerName = next.name
+                                            baseUrl = next.baseUrl
+                                            apiKey = store.getApiKey(next.id) ?: ""
+                                            store.saveSelectedProvider(next.id)
+                                        } else {
+                                            providerName = providerOptions.first().first
+                                            baseUrl = providerOptions.first().second
+                                            apiKey = ""
+                                            store.saveSelectedProvider("openai-compatible")
+                                        }
+                                        modelOptions = emptyList()
+                                    }
+                                    status = if (isArabic) "تم حذف المزود ورابطه ومفتاحه ونماذجه فقط." else "Provider, URL, key and its models deleted."
+                                }) { Text(if (isArabic) "حذف" else "Delete", color = MaterialTheme.colorScheme.error) }
+                            }
+                        }
+                    }
+                    OutlinedButton(onClick = { showAddProvider = true }) {
+                        Text(if (isArabic) "＋ إضافة مزود باسم جديد" else "＋ Add provider with custom name")
                     }
                     OutlinedTextField(baseUrl, { baseUrl = it }, label = { Text("Base URL") }, singleLine = true)
                     OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key (leave blank if not required)") },
@@ -422,5 +461,50 @@ fun ChatHomeScreen(isArabic: Boolean) {
             },
             dismissButton = { TextButton(onClick = { showSettings = false }) { Text(if (isArabic) "إلغاء" else "Cancel") } }
         )
+        if (showAddProvider) {
+            AlertDialog(
+                onDismissRequest = { showAddProvider = false },
+                title = { Text(if (isArabic) "إضافة مزود جديد" else "Add a new provider") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(newProviderName, { newProviderName = it },
+                            label = { Text(if (isArabic) "اسم المزود من اختيارك" else "Your provider name") }, singleLine = true)
+                        OutlinedTextField(newProviderUrl, { newProviderUrl = it },
+                            label = { Text("Base URL") }, singleLine = true)
+                        OutlinedTextField(newProviderKey, { newProviderKey = it },
+                            label = { Text("API key") }, singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val cleanName = newProviderName.trim()
+                        val cleanUrl = newProviderUrl.trim()
+                        val id = cleanName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                        if (cleanName.isBlank() || cleanUrl.isBlank() || id.isBlank()) {
+                            status = if (isArabic) "اكتبي اسم المزود ورابطه بشكل صحيح." else "Enter a valid provider name and URL."
+                        } else if (registeredProviders.any { it.id == id }) {
+                            status = if (isArabic) "الاسم ده مسجل بالفعل؛ اختاري اسمًا مختلفًا." else "That provider name is already registered; choose another."
+                        } else {
+                            store.saveProvider(id, cleanName, cleanUrl, newProviderKey)
+                            registeredProviders = store.listProviders()
+                            providerName = cleanName
+                            baseUrl = cleanUrl
+                            apiKey = newProviderKey
+                            store.saveSelectedProvider(id)
+                            modelOptions = emptyList()
+                            newProviderName = ""
+                            newProviderUrl = ""
+                            newProviderKey = ""
+                            showAddProvider = false
+                            status = if (isArabic) "اتضاف المزود بشكل مستقل. حدّثي النماذج لاكتشاف نماذجه." else "Provider added independently. Refresh models to discover its models."
+                        }
+                    }) { Text(if (isArabic) "إضافة وحفظ" else "Add and save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddProvider = false }) { Text(if (isArabic) "إلغاء" else "Cancel") }
+                }
+            )
+        }
     }
 }

@@ -50,6 +50,35 @@ class GitHubApiClient(private val token: String) {
         return GitHubFile(path, obj.optString("sha"), bytes.toString(Charsets.UTF_8))
     }
 
+    /** Lists branch names for the selected repository. */
+    fun listBranches(owner: String, repo: String): List<String> {
+        val array = JSONArray(execute(request("/repos/$owner/$repo/branches?per_page=100").get().build()))
+        return (0 until array.length()).map { array.getJSONObject(it).optString("name") }
+    }
+
+    /** Lists open issues; pull requests are excluded by GitHub's issues endpoint only when filtered client-side. */
+    fun listIssues(owner: String, repo: String, state: String = "open"): List<JSONObject> {
+        require(state in setOf("open", "closed", "all"))
+        val array = JSONArray(execute(request("/repos/$owner/$repo/issues?state=$state&per_page=100").get().build()))
+        return (0 until array.length()).map { array.getJSONObject(it) }.filter { !it.has("pull_request") }
+    }
+
+    /** Lists pull requests and their branch/state metadata. */
+    fun listPullRequests(owner: String, repo: String, state: String = "open"): List<JSONObject> {
+        require(state in setOf("open", "closed", "all"))
+        val array = JSONArray(execute(request("/repos/$owner/$repo/pulls?state=$state&per_page=100").get().build()))
+        return (0 until array.length()).map { array.getJSONObject(it) }
+    }
+
+    /** Creates an issue only when the caller explicitly invokes this method. */
+    fun createIssue(owner: String, repo: String, title: String, bodyText: String = ""): String {
+        require(title.isNotBlank()) { "Issue title is required." }
+        val body = JSONObject().put("title", title).put("body", bodyText)
+        val call = request("/repos/$owner/$repo/issues")
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        return JSONObject(execute(call)).optString("html_url")
+    }
+
     fun writeFile(owner: String, repo: String, path: String, content: String, message: String, branch: String, existingSha: String? = null): String {
         require(message.isNotBlank()) { "A commit message is required." }
         val body = JSONObject()

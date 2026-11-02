@@ -168,12 +168,23 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     val selectedModel = selected.model
 
     LaunchedEffect(selectedModel, modelOptions) { onTopModelOptionsChanged(selectedModel, modelOptions) }
-    LaunchedEffect(providerName, registeredProviders) {
-        val providerCount = (registeredProviders.map { it.id } +
-            providerStorageId(providerName, registeredProviders)).distinct().size
-        onTopTokenCountChanged(List(providerCount.coerceAtLeast(1)) {
-            if (isArabic) "غير متاح" else "N/A"
-        }.joinToString(" / "))
+    LaunchedEffect(providerName, registeredProviders, apiKey) {
+        val configured = (listOf(
+            com.aiuniversalhub.data.SavedProvider(
+                providerStorageId(providerName, registeredProviders), providerName, baseUrl
+            )
+        ) + registeredProviders).distinctBy { it.id }
+        val values = withContext(Dispatchers.IO) {
+            configured.map { item ->
+                val key = if (item.name == providerName) apiKey
+                    else store.getApiKey(item.id).orEmpty()
+                val balance = try {
+                    client.getProviderBalance(item.name, key)
+                } catch (_: Exception) { null }
+                balance ?: (if (isArabic) "غير متاح" else "N/A")
+            }
+        }
+        onTopTokenCountChanged(values.joinToString(" / "))
     }
     LaunchedEffect(topSelectedModel, selectedId, modelOptions) {
         if (topSelectedModel.isNotBlank() && topSelectedModel != selected.model && topSelectedModel in modelOptions) {

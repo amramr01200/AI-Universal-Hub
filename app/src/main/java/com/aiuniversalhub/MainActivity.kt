@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.aiuniversalhub.background.BackgroundTaskService
+import com.aiuniversalhub.chat.ChatHomeScreen
 import com.aiuniversalhub.registry.ToolLibraryScreen
 import com.aiuniversalhub.runtime.RuntimeCenterScreen
 import androidx.activity.ComponentActivity
@@ -108,31 +109,7 @@ fun HubApp() {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (selectedTab == 0) {
-                    item {
-                        Text(
-                            if (isArabic) "مساحة الذكاء الاصطناعي الخاصة بك" else "Your AI workspace",
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                    }
-                    item {
-                        Text(
-                            if (isArabic) "إدارة النماذج والمزودين والأدوات من مكان واحد." else "Manage models, providers and tools in one place."
-                        )
-                    }
-                    item {
-                        Card {
-                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(if (isArabic) "حالة المنصة" else "Platform status", style = MaterialTheme.typography.titleMedium)
-                                Text(if (isArabic) "الهيكل الأساسي ومركز الأدوات جاهزان للتطوير." else "App foundation and tools catalog are ready for the next integrations.")
-                                Text(if (isArabic) "Termux: " + if (termuxInstalled) "مثبّت" else "غير مثبّت" else "Termux: " + if (termuxInstalled) "Installed" else "Not installed")
-                            }
-                        }
-                    }
-                    item {
-                        Button(onClick = { selectedTab = 1 }) {
-                            Text(if (isArabic) "فتح مركز الأدوات" else "Open Tools Center")
-                        }
-                    }
+                    item { ChatHomeScreen(isArabic = isArabic) }
                 } else if (selectedTab == 1) {
                     item {
                         Text(if (isArabic) "مركز الأدوات" else "Tools Center", style = MaterialTheme.typography.headlineSmall)

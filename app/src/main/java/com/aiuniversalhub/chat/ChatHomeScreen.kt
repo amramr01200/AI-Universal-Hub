@@ -168,9 +168,12 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     val selectedModel = selected.model
 
     LaunchedEffect(selectedModel, modelOptions) { onTopModelOptionsChanged(selectedModel, modelOptions) }
-    LaunchedEffect(selected.messages) {
-        val estimatedTokens = selected.messages.sumOf { it.content.length }.let { (it + 3) / 4 }
-        onTopTokenCountChanged(estimatedTokens.toString())
+    LaunchedEffect(providerName, registeredProviders) {
+        val providerCount = (registeredProviders.map { it.id } +
+            providerStorageId(providerName, registeredProviders)).distinct().size
+        onTopTokenCountChanged(List(providerCount.coerceAtLeast(1)) {
+            if (isArabic) "غير متاح" else "N/A"
+        }.joinToString(" / "))
     }
     LaunchedEffect(topSelectedModel, selectedId, modelOptions) {
         if (topSelectedModel.isNotBlank() && topSelectedModel != selected.model && topSelectedModel in modelOptions) {

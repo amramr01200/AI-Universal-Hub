@@ -26,4 +26,25 @@ class SecureStore(context: Context) {
     fun deleteApiKey(providerId: String) {
         prefs.edit().remove("api_key_$providerId").apply()
     }
+
+    fun saveProviderUrl(providerId: String, baseUrl: String) {
+        prefs.edit().putString("provider_url_$providerId", baseUrl.trim()).apply()
+    }
+
+    fun getProviderUrl(providerId: String, defaultValue: String = ""): String =
+        prefs.getString("provider_url_$providerId", defaultValue) ?: defaultValue
+
+    fun saveSelectedProvider(providerId: String) {
+        prefs.edit().putString("selected_provider", providerId).apply()
+    }
+
+    fun getSelectedProvider(defaultValue: String = "openai-compatible"): String =
+        prefs.getString("selected_provider", defaultValue) ?: defaultValue
+
+    fun saveSelectedModel(providerId: String, model: String) {
+        prefs.edit().putString("selected_model_$providerId", model).apply()
+    }
+
+    fun getSelectedModel(providerId: String): String =
+        prefs.getString("selected_model_$providerId", "") ?: ""
 }

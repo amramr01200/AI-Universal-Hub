@@ -168,9 +168,10 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     val selectedModel = selected.model
 
     LaunchedEffect(selectedModel, modelOptions) { onTopModelOptionsChanged(selectedModel, modelOptions) }
-    LaunchedEffect(topSelectedModel, selectedId) {
+    LaunchedEffect(topSelectedModel, selectedId, modelOptions) {
         if (topSelectedModel.isNotBlank() && topSelectedModel != selected.model && topSelectedModel in modelOptions) {
             threads = threads.map { if (it.id == selectedId) it.copy(model = topSelectedModel) else it }
+            store.saveSelectedModel(providerStorageId(providerName, registeredProviders), topSelectedModel)
         }
     }
 
@@ -288,39 +289,18 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         }
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                    Text("☰", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.headlineSmall)
-                }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = {
-                    if (baseUrl.isBlank()) status = if (isArabic) "أدخلي رابط المزود في إعدادات AI." else "Enter provider URL in AI settings."
-                    else {
-                        busy = true
-                        scope.launch {
-                            try {
-                                val raw = withContext(Dispatchers.IO) { client.listModels(baseUrl, apiKey) }
-                                val found = client.parseModelIds(raw)
-                                modelOptions = found
-                                store.saveModels(providerStorageId(providerName, registeredProviders), found)
-                                if (found.isNotEmpty() && selectedModel !in found) updateSelectedModel(found.first())
-                                status = if (found.isEmpty()) (if (isArabic) "المزود لم يرجع نماذج." else "No models returned.") else (if (isArabic) "تم تحميل ${found.size} نموذج" else "Loaded ${found.size} models")
-                            } catch (e: Exception) { status = e.message ?: "Connection failed" }
-                            busy = false
-                        }
-                    }
-                }, enabled = !busy) { Text("↻") }
-                TextButton(onClick = { showTaskManager = true }) { Text("◷", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
-                TextButton(onClick = { showLiveSearch = true }) { Text("⌕", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
-
+                    val id = nextId++
+                    threads = listOf(ChatThread(id, if (isArabic) "محادثة جديدة" else "New chat")) + threads
+                    selectedId = id
+                    pendingImage = null
+                    status = ""
+                }) { Text("＋", color = androidx.compose.ui.graphics.Color(0xFFD6B56D)) }
+                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                    Text("☰", color = androidx.compose.ui.graphics.Color(0xFFD6B56D), style = MaterialTheme.typography.headlineSmall)
+                }
             }
-            Text(
-                (if (isArabic) "المزود: " else "Provider: ") + providerName + " • " +
-                    (if (isArabic) "السياق تقديريًا: " else "Estimated context: ") +
-                    selected.messages.sumOf { it.content.length }.let { (it + 3) / 4 } +
-                    (if (isArabic) " توكن" else " tokens"),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.secondary
-            )
             HorizontalDivider()
             LazyColumn(
                 state = messageListState,

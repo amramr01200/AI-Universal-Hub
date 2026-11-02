@@ -1,5 +1,11 @@
 package com.aiuniversalhub.chat
 
+import android.content.Intent
+import android.net.Uri
+import android.speech.RecognizerIntent
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -19,11 +26,17 @@ import org.json.JSONObject
 import org.json.JSONArray
 
 private data class ChatMessage(val role: String, val content: String)
-private data class ChatThread(val id: Int, val title: String, val messages: List<ChatMessage> = emptyList())
+private data class ChatThread(
+    val id: Int,
+    val title: String,
+    val messages: List<ChatMessage> = emptyList(),
+    val model: String = ""
+)
 
 private fun loadChatThreads(context: android.content.Context): List<ChatThread> {
     return try {
-        val raw = context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE).getString("threads", null) ?: return emptyList()
+        val raw = context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE)
+            .getString("threads", null) ?: return emptyList()
         val array = JSONArray(raw)
         (0 until array.length()).map { index ->
             val obj = array.getJSONObject(index)
@@ -32,7 +45,7 @@ private fun loadChatThreads(context: android.content.Context): List<ChatThread> 
                 val m = messagesJson.getJSONObject(i)
                 ChatMessage(m.optString("role"), m.optString("content"))
             }
-            ChatThread(obj.optInt("id"), obj.optString("title"), messages)
+            ChatThread(obj.optInt("id"), obj.optString("title"), messages, obj.optString("model"))
         }
     } catch (_: Exception) { emptyList() }
 }
@@ -42,7 +55,8 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
     threads.forEach { thread ->
         val messages = JSONArray()
         thread.messages.forEach { messages.put(JSONObject().put("role", it.role).put("content", it.content)) }
-        array.put(JSONObject().put("id", thread.id).put("title", thread.title).put("messages", messages))
+        array.put(JSONObject().put("id", thread.id).put("title", thread.title)
+            .put("model", thread.model).put("messages", messages))
     }
     context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE)
         .edit().putString("threads", array.toString()).apply()
@@ -56,72 +70,165 @@ fun ChatHomeScreen(isArabic: Boolean) {
     val client = remember { AiClient() }
     val scope = rememberCoroutineScope()
     var threads by remember {
-        mutableStateOf(loadChatThreads(context).ifEmpty { listOf(ChatThread(1, if (isArabic) "محادثة جديدة" else "New chat")) })
+        mutableStateOf(loadChatThreads(context).ifEmpty {
+            listOf(ChatThread(1, if (isArabic) "محادثة جديدة" else "New chat"))
+        })
     }
-    var selectedId by remember { mutableIntStateOf(1) }
-    var nextId by remember { mutableIntStateOf(2) }
+    var selectedId by remember { mutableIntStateOf(threads.first().id) }
+    var nextId by remember { mutableIntStateOf((threads.maxOfOrNull { it.id } ?: 0) + 1) }
     var draft by remember { mutableStateOf("") }
     val providerOptions = listOf(
-        "OpenAI-compatible" to "https://api.openai.com/v1",
-        "OpenRouter" to "https://openrouter.ai/api/v1",
-        "FreeModel" to "https://freemodel.in/v1",
-        "LiteLLM" to "http://localhost:4000/v1",
-        "Ollama" to "http://localhost:11434/v1",
-        "FreeLLMAPI" to ""
+        Triple("OpenAI-compatible", "https://api.openai.com/v1", true),
+        Triple("OpenRouter", "https://openrouter.ai/api/v1", true),
+        Triple("FreeModel", "https://freemodel.in/v1", true),
+        Triple("LiteLLM", "http://localhost:4000/v1", true),
+        Triple("Ollama", "http://localhost:11434/v1", false),
+        Triple("FreeLLMAPI", "", true)
     )
     var providerName by remember { mutableStateOf("OpenAI-compatible") }
-    var baseUrl by remember { mutableStateOf("https://api.openai.com/v1") }
+    var baseUrl by remember { mutableStateOf(store.getProviderUrl("openai-compatible", "https://api.openai.com/v1")) }
     var apiKey by remember { mutableStateOf(store.getApiKey("openai-compatible") ?: "") }
-    var model by remember { mutableStateOf("gpt-4o-mini") }
-    var modelOptions by remember { mutableStateOf(listOf("gpt-4o-mini")) }
+    var modelOptions by remember { mutableStateOf(emptyList<String>()) }
+    var modelMenuExpanded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    var pendingImage by remember { mutableStateOf<Uri?>(null) }
+
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        pendingImage = uri
+        if (uri != null) status = if (isArabic) "تم إرفاق الصورة. اكتبي رسالتك ثم اضغطي إرسال." else "Image attached. Add a message and press Send."
+    }
+    val speechInput = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (!spoken.isNullOrBlank()) draft = listOf(draft, spoken).filter { it.isNotBlank() }.joinToString(" ")
+    }
+
     LaunchedEffect(threads) { saveChatThreads(context, threads) }
-    LaunchedEffect(threads) { if (threads.none { it.id == selectedId }) selectedId = threads.first().id }
+    LaunchedEffect(threads) {
+        if (threads.none { it.id == selectedId }) selectedId = threads.first().id
+    }
     val selected = threads.firstOrNull { it.id == selectedId } ?: threads.first()
-    val messages = selected.messages
+    val selectedModel = selected.model
+
+    fun updateSelectedModel(value: String) {
+        threads = threads.map { if (it.id == selectedId) it.copy(model = value) else it }
+        store.saveSelectedModel(providerName.lowercase().replace(" ", "-"), value)
+    }
+
+    fun sendMessage() {
+        val prompt = draft.trim()
+        val imageUri = pendingImage
+        if (prompt.isBlank() && imageUri == null) return
+        if (selectedModel.isBlank()) {
+            status = if (isArabic) "اختاري نموذج المحادثة من القائمة أولًا، ثم أرسلي الرسالة." else "Select a conversation model before sending."
+            return
+        }
+        val userText = prompt + if (imageUri != null) (if (prompt.isBlank()) "" else "\n") + (if (isArabic) "📎 صورة مرفقة" else "📎 Image attached") else ""
+        val thread = threads.first { it.id == selectedId }
+        val updated = thread.copy(
+            title = if (thread.messages.isEmpty()) (prompt.ifBlank { if (isArabic) "تحليل صورة" else "Image question" }).take(36) else thread.title,
+            messages = thread.messages + ChatMessage("user", userText)
+        )
+        threads = threads.map { if (it.id == selectedId) updated else it }
+        draft = ""
+        pendingImage = null
+        busy = true
+        status = ""
+        val targetThreadId = selectedId
+        scope.launch {
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    if (imageUri != null) {
+                        val bytes = context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
+                            ?: error(if (isArabic) "تعذر قراءة الصورة." else "Could not read the image.")
+                        require(bytes.size <= 12 * 1024 * 1024) {
+                            if (isArabic) "حجم الصورة أكبر من 12 ميجابايت." else "Image is larger than 12 MB."
+                        }
+                        val mime = context.contentResolver.getType(imageUri) ?: "image/jpeg"
+                        client.chatWithImage(baseUrl, apiKey, selectedModel, prompt, mime, Base64.encodeToString(bytes, Base64.NO_WRAP))
+                    } else {
+                        client.chat(baseUrl, apiKey, selectedModel, prompt)
+                    }
+                }
+                val answer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)
+                    ?.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() } ?: response
+                threads = threads.map { t ->
+                    if (t.id == targetThreadId) t.copy(messages = t.messages + ChatMessage("assistant", answer)) else t
+                }
+                status = ""
+            } catch (e: Exception) {
+                status = e.message ?: if (isArabic) "فشل الاتصال بالمزود." else "Provider request failed."
+            } finally {
+                busy = false
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (isArabic) "محادثاتك" else "Your chats", style = MaterialTheme.typography.headlineSmall)
-                Text("$providerName • $model", style = MaterialTheme.typography.bodySmall)
+                Text("$providerName • ${selectedModel.ifBlank { if (isArabic) "لم يتم اختيار نموذج" else "No model selected" }}",
+                    style = MaterialTheme.typography.bodySmall)
             }
             OutlinedButton(onClick = { showSettings = true }) { Text(if (isArabic) "إعدادات AI" else "AI settings") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = {
                 val id = nextId++
                 threads = listOf(ChatThread(id, if (isArabic) "محادثة جديدة" else "New chat")) + threads
                 selectedId = id
+                pendingImage = null
                 status = ""
             }) { Text(if (isArabic) "＋ شات جديد" else "＋ New chat") }
-            TextButton(onClick = {
-                if (apiKey.isBlank()) status = if (isArabic) "أضيفي مفتاح API من إعدادات AI أولاً." else "Add an API key in AI settings first."
+            OutlinedButton(onClick = {
+                if (baseUrl.isBlank()) status = if (isArabic) "أدخلي رابط المزود في إعدادات AI." else "Enter the provider URL in AI settings."
                 else {
                     busy = true
                     scope.launch {
                         try {
                             val raw = withContext(Dispatchers.IO) { client.listModels(baseUrl, apiKey) }
-                            val arr = JSONObject(raw).optJSONArray("data")
-                            val found = (0 until (arr?.length() ?: 0)).mapNotNull { arr?.optJSONObject(it)?.optString("id") }.filter { it.isNotBlank() }
-                            if (found.isNotEmpty()) { modelOptions = found; if (model !in found) model = found.first() }
-                            status = if (found.isEmpty()) (if (isArabic) "لم يرجع المزود قائمة نماذج." else "Provider returned no models.") else (if (isArabic) "تم تحديث النماذج." else "Models refreshed.")
+                            val found = client.parseModelIds(raw)
+                            modelOptions = found
+                            if (found.isNotEmpty() && selectedModel !in found) updateSelectedModel(found.first())
+                            status = if (found.isEmpty()) (if (isArabic) "المزود لم يرجع نماذج متاحة." else "No models were returned by the provider.")
+                                else (if (isArabic) "تم تحميل ${found.size} نموذج." else "Loaded ${found.size} models.")
                         } catch (e: Exception) { status = e.message ?: "Connection failed" }
                         busy = false
                     }
                 }
             }, enabled = !busy) { Text(if (isArabic) "تحديث النماذج" else "Refresh models") }
         }
+        ExposedDropdownMenuBox(
+            expanded = modelMenuExpanded,
+            onExpandedChange = { modelMenuExpanded = !modelMenuExpanded },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = selectedModel.ifBlank { if (isArabic) "اختاري النموذج لهذه المحادثة" else "Select a model for this chat" },
+                onValueChange = {}, readOnly = true, enabled = modelOptions.isNotEmpty(),
+                label = { Text(if (isArabic) "النموذج المستخدم في المحادثة" else "Model used in this conversation") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelMenuExpanded) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(), singleLine = true
+            )
+            ExposedDropdownMenu(expanded = modelMenuExpanded, onDismissRequest = { modelMenuExpanded = false }) {
+                modelOptions.forEach { option ->
+                    DropdownMenuItem(text = { Text(option) }, onClick = {
+                        updateSelectedModel(option)
+                        modelMenuExpanded = false
+                    })
+                }
+            }
+        }
         Text(if (isArabic) "المحادثات السابقة" else "Recent conversations", style = MaterialTheme.typography.titleMedium)
-        Row(Modifier.fillMaxWidth().height(100.dp)) {
+        Row(Modifier.fillMaxWidth().height(88.dp)) {
             LazyColumn(Modifier.fillMaxWidth()) {
                 items(threads, key = { it.id }) { thread ->
                     ListItem(
                         headlineContent = { Text(thread.title, maxLines = 1) },
                         supportingContent = { Text(thread.messages.lastOrNull()?.content ?: if (isArabic) "لا توجد رسائل بعد" else "No messages yet", maxLines = 1) },
-                        modifier = Modifier.clickable { selectedId = thread.id },
+                        modifier = Modifier.clickable { selectedId = thread.id; pendingImage = null },
                         trailingContent = { if (thread.id == selectedId) Text("●", color = MaterialTheme.colorScheme.primary) }
                     )
                 }
@@ -130,7 +237,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
         HorizontalDivider()
         Text(selected.title, style = MaterialTheme.typography.titleMedium)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(messages) { msg ->
+            items(messages = selected.messages) { msg ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = if (msg.role == "user") MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)
@@ -143,39 +250,33 @@ fun ChatHomeScreen(isArabic: Boolean) {
             }
             if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (pendingImage != null) {
+            Text(if (isArabic) "تم اختيار صورة للإرفاق" else "Image selected for attachment", color = MaterialTheme.colorScheme.primary)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
             OutlinedTextField(
                 value = draft, onValueChange = { draft = it }, modifier = Modifier.weight(1f),
                 placeholder = { Text(if (isArabic) "اكتبي رسالتك..." else "Message AI...") },
                 enabled = !busy, maxLines = 4
             )
-            Button(enabled = draft.isNotBlank() && !busy, onClick = {
-                val prompt = draft.trim()
-                draft = ""
-                val current = threads.first { it.id == selectedId }
-                val updated = current.copy(
-                    title = if (current.messages.isEmpty()) prompt.take(36) else current.title,
-                    messages = current.messages + ChatMessage("user", prompt)
-                )
-                threads = threads.map { if (it.id == selectedId) updated else it }
-                if (apiKey.isBlank()) {
-                    status = if (isArabic) "الشات جاهز، لكن يلزم إضافة مفتاح API للاتصال بالنموذج." else "Chat UI is ready; add an API key to connect to the model."
-                } else {
-                    busy = true
-                    scope.launch {
-                        try {
-                            val response = withContext(Dispatchers.IO) { client.chat(baseUrl, apiKey, model, prompt) }
-                            val answer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")?.optString("content")
-                                ?: response
-                            threads = threads.map { t -> if (t.id == selectedId) t.copy(messages = t.messages + ChatMessage("assistant", answer)) else t }
-                            status = ""
-                        } catch (e: Exception) {
-                            status = e.message ?: "Request failed"
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedButton(onClick = { imagePicker.launch("image/*") }, enabled = !busy) { Text("＋") }
+                OutlinedButton(onClick = {
+                    try {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (isArabic) "ar-EG" else "en-US")
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, if (isArabic) "تحدثي الآن" else "Speak now")
                         }
-                        busy = false
+                        speechInput.launch(intent)
+                    } catch (_: Exception) {
+                        status = if (isArabic) "الإملاء الصوتي غير متاح على هذا الجهاز." else "Speech input is unavailable on this device."
                     }
-                }
-            }) { Text(if (isArabic) "إرسال" else "Send") }
+                }, enabled = !busy) { Text("🎙") }
+            }
+            Button(enabled = !busy && (draft.isNotBlank() || pendingImage != null), onClick = { sendMessage() }) {
+                Text(if (isArabic) "إرسال" else "Send")
+            }
         }
         if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
     }
@@ -188,39 +289,38 @@ fun ChatHomeScreen(isArabic: Boolean) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     var providerExpanded by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(expanded = providerExpanded, onExpandedChange = { providerExpanded = !providerExpanded }) {
-                        OutlinedTextField(providerName, { }, readOnly = true, label = { Text(if (isArabic) "المزود" else "Provider") }, modifier = Modifier.menuAnchor().fillMaxWidth(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerExpanded) })
+                        OutlinedTextField(providerName, {}, readOnly = true,
+                            label = { Text(if (isArabic) "المزود" else "Provider") },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerExpanded) })
                         ExposedDropdownMenu(expanded = providerExpanded, onDismissRequest = { providerExpanded = false }) {
                             providerOptions.forEach { option ->
                                 DropdownMenuItem(text = { Text(option.first) }, onClick = {
                                     providerName = option.first
-                                    if (option.second.isNotBlank()) baseUrl = option.second
-                                    apiKey = store.getApiKey(option.first.lowercase().replace(" ", "-")) ?: ""
+                                    val id = option.first.lowercase().replace(" ", "-")
+                                    baseUrl = store.getProviderUrl(id, option.second)
+                                    apiKey = store.getApiKey(id) ?: ""
+                                    modelOptions = emptyList()
                                     providerExpanded = false
                                 })
                             }
                         }
                     }
                     OutlinedTextField(baseUrl, { baseUrl = it }, label = { Text("Base URL") }, singleLine = true)
-                    OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key") }, singleLine = true)
-                    Text(if (isArabic) "عنوان API" else "API endpoint")
-                    Text(if (isArabic) "يمكن تعديل العنوان ليتوافق مع المزود أو الخادم المحلي." else "You can customize this URL for your provider or local host.", style = MaterialTheme.typography.bodySmall)
-                    Text(if (isArabic) "النموذج" else "Model")
-                    var expanded by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-                        OutlinedTextField(model, { model = it }, readOnly = true, modifier = Modifier.menuAnchor().fillMaxWidth(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) })
-                        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            modelOptions.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { model = option; expanded = false }) }
-                        }
-                    }
-                    Text(if (isArabic) "يُحفظ المفتاح مشفرًا على الجهاز. المحادثات حاليًا مؤقتة داخل الجلسة." else "The key is encrypted on-device. Chats are currently session-only.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key (leave blank if not required)") },
+                        singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    Text(if (isArabic) "لا يلزم إدخال اسم النموذج هنا. حمّلي النماذج ثم اختاري نموذجًا لكل محادثة." else "No model name is required here. Refresh models and select one per conversation.",
+                        style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
                     val keyId = providerName.lowercase().replace(" ", "-")
+                    store.saveProviderUrl(keyId, baseUrl.trim())
                     if (apiKey.isNotBlank()) store.saveApiKey(keyId, apiKey.trim()) else store.deleteApiKey(keyId)
+                    store.saveSelectedProvider(keyId)
                     showSettings = false
-                    status = if (isArabic) "تم حفظ إعدادات المزود على الجهاز." else "Provider settings saved on this device."
+                    status = if (isArabic) "تم حفظ رابط المزود والمفتاح على الجهاز. اضغطي تحديث النماذج لاختبار الاتصال." else "Provider settings saved. Refresh models to test the connection."
                 }) { Text(if (isArabic) "حفظ" else "Save") }
             },
             dismissButton = { TextButton(onClick = { showSettings = false }) { Text(if (isArabic) "إلغاء" else "Cancel") } }

@@ -55,6 +55,7 @@ fun HubApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
     var termuxInstalled by remember { mutableStateOf(isPackageInstalled(context, "com.termux")) }
     var message by remember { mutableStateOf("") }
+    var selectedTool by remember { mutableStateOf<ToolCard?>(null) }
 
     val tools = listOf(
         ToolCard("termux", "Termux", "Android terminal environment", "بيئة أوامر محلية على أندرويد",
@@ -176,12 +177,9 @@ fun HubApp() {
                                             }) { Text(if (isArabic) "عرض صفحة التثبيت" else "Open install page") }
                                         }
                                     }
-                                    "ollama" -> OutlinedButton(onClick = {
-                                        message = if (isArabic) "سيتم إضافة فحص الاتصال المحلي في مرحلة لاحقة." else "Local runtime connection checks are planned for a later milestone."
-                                    }) { Text(if (isArabic) "تفاصيل الربط" else "Connection details") }
-                                    else -> OutlinedButton(onClick = {
-                                        message = if (isArabic) "التكامل قيد التطوير وسيظهر هنا عند جاهزيته." else "This integration is under development."
-                                    }) { Text(if (isArabic) "التفاصيل" else "Details") }
+                                    else -> OutlinedButton(onClick = { selectedTool = tool }) {
+                                        Text(if (isArabic) "فتح إعدادات الأداة" else "Open tool setup")
+                                    }
                                 }
                             }
                         }
@@ -198,6 +196,44 @@ fun HubApp() {
                     item { RuntimeCenterScreen(isArabic = isArabic) }
                 }
             }
+        }
+        selectedTool?.let { tool ->
+            AlertDialog(
+                onDismissRequest = { selectedTool = null },
+                title = { Text(tool.name) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (isArabic) tool.descriptionAr else tool.descriptionEn)
+                        when (tool.id) {
+                            "ollama" -> Text(if (isArabic)
+                                "للتوصيل: شغّلي Ollama على جهاز أو خادم يمكن للهاتف الوصول إليه، ثم استخدمي عنوان OpenAI-compatible مثل http://HOST:11434/v1 من إعدادات مزود الذكاء الاصطناعي. localhost على الهاتف لن يشير تلقائيًا إلى جهاز الكمبيوتر."
+                                else "Connect an Ollama host reachable from this phone, then use its OpenAI-compatible endpoint (for example http://HOST:11434/v1) in AI provider settings. Phone localhost does not point to your computer.")
+                            "mcp" -> Text(if (isArabic)
+                                "عميل MCP موجود بشكل أولي داخل المشروع، لكن شاشة إضافة الخادم وإدارة الجلسة واستعراض الأدوات لم تكتمل بعد؛ لذلك لا يوجد اتصال فعلي من هذه الشاشة الآن."
+                                else "The project has an early MCP client, but server setup, session management, and tool browsing UI are not complete yet; no live connection is available here.")
+                            "litellm" -> Text(if (isArabic)
+                                "أدخلي عنوان خادم LiteLLM ومفتاحه في إعدادات مزود الذكاء الاصطناعي داخل شاشة المحادثة. مثال العنوان: http://HOST:4000/v1. يجب أن يكون الخادم شغالًا ويمكن للهاتف الوصول إليه."
+                                else "Enter your LiteLLM server URL and key in AI provider settings on the chat screen. Example: http://HOST:4000/v1. The server must be running and reachable from this phone.")
+                            else -> Text(if (isArabic) "افتحي Termux لإكمال الإعداد." else "Open Termux to finish setup.")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        selectedTool = null
+                        if (tool.id == "termux" && termuxInstalled) {
+                            context.packageManager.getLaunchIntentForPackage("com.termux")?.let(context::startActivity)
+                        } else if (tool.id == "termux" && tool.installUrl != null) {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(tool.installUrl)))
+                        } else {
+                            selectedTab = 0
+                        }
+                    }) { Text(if (isArabic) if (tool.id == "termux") "متابعة" else "الانتقال للمحادثة" else if (tool.id == "termux") "Continue" else "Go to chat") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { selectedTool = null }) { Text(if (isArabic) "إغلاق" else "Close") }
+                }
+            )
         }
         if (showAppSettings) {
             AlertDialog(

@@ -44,3 +44,12 @@ The app now includes a local persistent library for user-registered tools and mo
 Important distinction: adding an entry registers metadata; it does not install or sandbox an arbitrary third-party package. Actual installation and in-app execution require a compatible, reviewed adapter (for example an HTTP API, MCP client, or explicitly configured Termux bridge). The library is the management surface for those adapters, not a claim that every Linux/Termux tool can run natively inside Android.
 
 The foreground service added in this milestone is an execution shell and notification control only. WorkManager is included as a dependency, but durable task orchestration, checkpoint recovery, per-tool adapters, and real background project generation remain future implementation work.
+
+
+## Runtime toolchain catalog
+
+The app now includes a curated in-app catalog for Python, pip, uv, Node.js/npm, Git, Clang, CMake, Rust, FFmpeg, proot-distro, and the Termux pkg/apt package manager. Each entry documents its purpose and a suggested package command. The catalog is informational at this stage: it does not claim these runtimes are installed or updated.
+
+The planned package backend must target an explicitly configured compatible environment (for example, a supported Termux installation/bridge or a remote Linux host). Android app-private storage is sandboxed; the app cannot silently install arbitrary Linux packages into the Android OS. The future updater must read installed versions, check trusted upstream/package repositories, show release notes and compatibility, ask before upgrades, preserve configuration, and support rollback where the package ecosystem allows it.
+
+Docker is listed as a compatibility target, not a native Android package: a conventional Docker daemon generally requires a compatible Linux host or remote container service.

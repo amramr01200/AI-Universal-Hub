@@ -8,6 +8,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+data class TokenUsage(val promptTokens: Int?, val completionTokens: Int?, val totalTokens: Int?)
+
 class AiClient {
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -24,15 +26,16 @@ class AiClient {
         return normalized + path
     }
 
+    private fun requestBuilder(baseUrl: String, apiKey: String, path: String): Request.Builder {
+        val builder = Request.Builder().url(endpoint(baseUrl, path))
+        if (apiKey.isNotBlank()) builder.header("Authorization", "Bearer $apiKey")
+        return builder
+    }
+
     fun listModels(baseUrl: String, apiKey: String): String {
-        val requestBuilder = Request.Builder().url(endpoint(baseUrl, "/models")).get()
-        if (apiKey.isNotBlank()) requestBuilder.header("Authorization", "Bearer $apiKey")
-        http.newCall(requestBuilder.build()).execute().use { response ->
+        http.newCall(requestBuilder(baseUrl, apiKey, "/models").get().build()).execute().use { response ->
             val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val detail = try { JSONObject(body).optString("message").ifBlank { JSONObject(body).optString("error") } } catch (_: Exception) { "" }
-                error("Provider HTTP ${response.code}" + if (detail.isNotBlank()) ": ${detail.take(240)}" else "")
-            }
+            if (!response.isSuccessful) error(providerError(response.code, body))
             return body.ifBlank { "{}" }
         }
     }
@@ -46,44 +49,68 @@ class AiClient {
         }.distinct().sorted()
     }
 
+    fun parseUsage(raw: String): TokenUsage {
+        val usage = JSONObject(raw).optJSONObject("usage") ?: return TokenUsage(null, null, null)
+        fun value(vararg keys: String): Int? {
+            keys.forEach { key ->
+                if (usage.has(key) && !usage.isNull(key)) return usage.optInt(key).takeIf { it >= 0 }
+            }
+            return null
+        }
+        return TokenUsage(
+            value("prompt_tokens", "input_tokens"),
+            value("completion_tokens", "output_tokens"),
+            value("total_tokens")
+        )
+    }
+
+    fun chatWithHistory(baseUrl: String, apiKey: String, model: String, messages: List<Pair<String, String>>): String {
+        require(model.isNotBlank()) { "Select a model before sending a message." }
+        require(messages.isNotEmpty()) { "Add a message before sending." }
+        val jsonMessages = JSONArray()
+        messages.forEach { (role, content) ->
+            if (role == "system" || role == "user" || role == "assistant") {
+                jsonMessages.put(JSONObject().put("role", role).put("content", content))
+            }
+        }
+        val payload = JSONObject().put("model", model).put("messages", jsonMessages)
+        val request = requestBuilder(baseUrl, apiKey, "/chat/completions")
+            .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+        http.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) error(providerError(response.code, body))
+            return body.ifBlank { "{}" }
+        }
+    }
+
     fun chatWithImage(baseUrl: String, apiKey: String, model: String, message: String, mimeType: String, imageBase64: String): String {
         require(model.isNotBlank()) { "Select a model before sending a message." }
         val content = JSONArray()
             .put(JSONObject().put("type", "text").put("text", message.ifBlank { "Describe this image." }))
             .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:$mimeType;base64,$imageBase64")))
         val payload = JSONObject().put("model", model).put(
-            "messages",
-            JSONArray().put(JSONObject().put("role", "user").put("content", content))
+            "messages", JSONArray().put(JSONObject().put("role", "user").put("content", content))
         )
-        val requestBuilder = Request.Builder().url(endpoint(baseUrl, "/chat/completions"))
-        if (apiKey.isNotBlank()) requestBuilder.header("Authorization", "Bearer $apiKey")
-        val request = requestBuilder.post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+        val request = requestBuilder(baseUrl, apiKey, "/chat/completions")
+            .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
         http.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val detail = try { JSONObject(body).optString("message").ifBlank { JSONObject(body).optString("error") } } catch (_: Exception) { "" }
-                error("Provider HTTP ${response.code}" + if (detail.isNotBlank()) ": ${detail.take(240)}" else "")
-            }
+            if (!response.isSuccessful) error(providerError(response.code, body))
             return body.ifBlank { "{}" }
         }
     }
 
-    fun chat(baseUrl: String, apiKey: String, model: String, message: String): String {
-        require(model.isNotBlank()) { "Select a model before sending a message." }
-        val payload = JSONObject()
-            .put("model", model)
-            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", message)))
-        val requestBuilder = Request.Builder().url(endpoint(baseUrl, "/chat/completions"))
-        if (apiKey.isNotBlank()) requestBuilder.header("Authorization", "Bearer $apiKey")
-        val request = requestBuilder
-            .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
-        http.newCall(request).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val detail = try { JSONObject(body).optString("message").ifBlank { JSONObject(body).optString("error") } } catch (_: Exception) { "" }
-                error("Provider HTTP ${response.code}" + if (detail.isNotBlank()) ": ${detail.take(240)}" else "")
+    fun chat(baseUrl: String, apiKey: String, model: String, message: String): String =
+        chatWithHistory(baseUrl, apiKey, model, listOf("user" to message))
+
+    private fun providerError(code: Int, body: String): String {
+        val detail = try {
+            val root = JSONObject(body)
+            root.optString("message").ifBlank {
+                val error = root.opt("error")
+                if (error is JSONObject) error.optString("message") else error?.toString().orEmpty()
             }
-            return body.ifBlank { "{}" }
-        }
+        } catch (_: Exception) { "" }
+        return "Provider HTTP $code" + if (detail.isNotBlank()) ": ${detail.take(240)}" else ""
     }
 }

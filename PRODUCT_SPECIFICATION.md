@@ -149,3 +149,15 @@ Manage compatible execution environments for Python, pip, uv, Node.js/npm, Git, 
 - Persist profile configuration and conversation association across app restarts and updates. Provide edit, test connection, start, stop, reconnect, and remove controls, plus a visible status indicator and an audit record for launch/stop/configuration actions.
 - Acceptance test: configure a Termux-hosted AI once; approve the bridge; start it from the Hub; verify the correct saved Hub conversation opens automatically; send a message and receive a reply without manually navigating Termux; close/reopen the Hub and verify the same profile, settings, model, and conversation are restored; test stopped service, unavailable bridge, timeout, and revoked permission states.
 
+
+
+## 18. Live token capacity and usage per model — explicit requirement
+- Display token information beside every model in selectors, provider/model cards, and the active project assistant panel.
+- Distinguish clearly between context window capacity (maximum tokens accepted in one context), current context usage, estimated remaining context capacity, and account/API quota or credits. These are different measurements and must never be conflated.
+- Refresh counts after each message, model switch, attachment change, tool call, context compaction, or project update. Update immediately from local estimates, then reconcile with authoritative provider usage when returned.
+- Show explicit numeric values and units. Label estimates as estimates and authoritative figures as provider-reported; show last-updated time when live refresh is unavailable.
+- Use the model's actual tokenizer when available. Otherwise show a clearly labeled approximation; never present character or word counts as exact token counts.
+- For project continuation, estimate the token budget needed from project files, conversation history, instructions, and planned output. Compare it with each compatible model's remaining context capacity and provider quota where available.
+- Show which models can continue the project within budget, which may need summarization/compaction or file selection, and which cannot proceed due to context, quota, capability, or connectivity limits. Explain the reason and let the user choose; never silently discard project context or switch models.
+- Some providers expose only per-request usage, some expose account credits/quota, and some expose neither. If unavailable, show 'غير متاح من المزود' / 'Not exposed by provider' rather than inventing a number.
+- Acceptance checks: verify counts update after messages and file attachments; distinguish context capacity from account quota; compare models for continuing the same project; label estimates; never fabricate unavailable quota; verify refresh after provider responses.

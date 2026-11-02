@@ -96,6 +96,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var showSettings by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    var usageLabel by remember { mutableStateOf("") }
     var pendingImage by remember { mutableStateOf<Uri?>(null) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -151,8 +152,15 @@ fun ChatHomeScreen(isArabic: Boolean) {
                         val mime = context.contentResolver.getType(imageUri) ?: "image/jpeg"
                         client.chatWithImage(baseUrl, apiKey, selectedModel, prompt, mime, Base64.encodeToString(bytes, Base64.NO_WRAP))
                     } else {
-                        client.chat(baseUrl, apiKey, selectedModel, prompt)
+                        val history = updated.messages.map { it.role to it.content }
+                        client.chatWithHistory(baseUrl, apiKey, selectedModel, history)
                     }
+                }
+                val usage = client.parseUsage(response)
+                usageLabel = if (usage.totalTokens != null) {
+                    (if (isArabic) "استهلاك آخر طلب: " else "Last request: ") + usage.totalTokens + (if (isArabic) " توكن" else " tokens")
+                } else {
+                    if (isArabic) "استهلاك التوكن من المزود غير متاح" else "Provider token usage unavailable"
                 }
                 val answer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)
                     ?.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() } ?: response
@@ -174,6 +182,13 @@ fun ChatHomeScreen(isArabic: Boolean) {
                 Text(if (isArabic) "محادثاتك" else "Your chats", style = MaterialTheme.typography.headlineSmall)
                 Text("$providerName • ${selectedModel.ifBlank { if (isArabic) "لم يتم اختيار نموذج" else "No model selected" }}",
                     style = MaterialTheme.typography.bodySmall)
+                val estimatedTokens = selected.messages.sumOf { it.content.length }.let { (it + 3) / 4 }
+                Text(
+                    (if (isArabic) "السياق المستخدم تقديريًا: " else "Estimated context used: ") +
+                        "$estimatedTokens " + (if (isArabic) "توكن تقريبًا" else "tokens approx."),
+                    style = MaterialTheme.typography.labelSmall
+                )
+                if (usageLabel.isNotBlank()) Text(usageLabel, style = MaterialTheme.typography.labelSmall)
             }
             OutlinedButton(onClick = { showSettings = true }) { Text(if (isArabic) "إعدادات AI" else "AI settings") }
         }

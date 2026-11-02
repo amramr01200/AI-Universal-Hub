@@ -160,7 +160,7 @@ fun HubApp() {
                         }
                     },
                     actions = {
-                        Text("T $topTokenCount", color = hubColors.secondary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 8.dp))
+                        Text(topTokenCount, color = hubColors.secondary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 8.dp))
                         Box {
                             IconButton(onClick = { showHubMenu = true }) {
                                 Text("⚙", color = hubColors.secondary, style = MaterialTheme.typography.titleLarge)

@@ -49,6 +49,44 @@ class AiClient {
         }.distinct().sorted()
     }
 
+    fun getProviderBalance(providerName: String, apiKey: String): String? {
+        if (apiKey.isBlank()) return null
+        val endpointUrl = when (providerName.trim().lowercase()) {
+            "openrouter" -> "https://openrouter.ai/api/v1/credits"
+            "deepseek" -> "https://api.deepseek.com/user/balance"
+            else -> return null
+        }
+        val request = Request.Builder()
+            .url(endpointUrl)
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
+        http.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) error(providerError(response.code, body))
+            val root = JSONObject(body)
+            return when (providerName.trim().lowercase()) {
+                "openrouter" -> {
+                    val data = root.optJSONObject("data") ?: return null
+                    if (!data.has("total_credits") || !data.has("total_usage")) return null
+                    val remaining = data.optDouble("total_credits") - data.optDouble("total_usage")
+                    "$" + String.format(java.util.Locale.US, "%.2f", remaining.coerceAtLeast(0.0))
+                }
+                "deepseek" -> {
+                    val balances = root.optJSONArray("balance_infos") ?: return null
+                    if (balances.length() == 0) return null
+                    val item = (0 until balances.length()).mapNotNull { balances.optJSONObject(it) }
+                        .firstOrNull { it.optString("currency") == "USD" }
+                        ?: balances.optJSONObject(0) ?: return null
+                    val currency = item.optString("currency")
+                    val amount = item.optString("total_balance")
+                    if (amount.isBlank() || amount == "null") null else "$currency $amount"
+                }
+                else -> null
+            }
+        }
+    }
+
     fun parseUsage(raw: String): TokenUsage {
         val usage = JSONObject(raw).optJSONObject("usage") ?: return TokenUsage(null, null, null)
         fun value(vararg keys: String): Int? {

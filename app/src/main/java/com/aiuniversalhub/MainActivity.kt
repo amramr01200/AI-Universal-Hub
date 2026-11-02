@@ -114,6 +114,8 @@ fun HubApp() {
         onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFE2D7DF)
     )
     var showAppSettings by remember { mutableStateOf(false) }
+    var showHubMenu by remember { mutableStateOf(false) }
+    var requestChatAiSettings by remember { mutableStateOf(false) }
 
     MaterialTheme(colorScheme = hubColors) {
         Scaffold(
@@ -127,16 +129,22 @@ fun HubApp() {
                     ),
                     title = { Text("AI Universal Hub", color = hubColors.secondary) },
                     actions = {
-                        TextButton(onClick = { showAppSettings = true }) {
-                            Text("⚙", color = hubColors.secondary, style = MaterialTheme.typography.titleLarge)
-                        }
-                        TextButton(onClick = { isArabic = !isArabic }) {
-                            Text(if (isArabic) "English" else "العربية", color = hubColors.primary)
+                        Box {
+                            IconButton(onClick = { showHubMenu = true }) {
+                                Text("⚙", color = hubColors.secondary, style = MaterialTheme.typography.titleLarge)
+                            }
+                            DropdownMenu(expanded = showHubMenu, onDismissRequest = { showHubMenu = false }) {
+                                DropdownMenuItem(text = { Text(if (isArabic) "مكتبتي" else "My Library") }, onClick = { selectedTab = 2; showHubMenu = false })
+                                DropdownMenuItem(text = { Text(if (isArabic) "الشبكات" else "Networks") }, onClick = { selectedTab = 3; showHubMenu = false })
+                                DropdownMenuItem(text = { Text(if (isArabic) "إعدادات الذكاء الاصطناعي" else "AI settings") }, onClick = { selectedTab = 0; requestChatAiSettings = true; showHubMenu = false })
+                                DropdownMenuItem(text = { Text(if (isArabic) "تغيير اللغة" else "Change language") }, onClick = { isArabic = !isArabic; showHubMenu = false })
+                                DropdownMenuItem(text = { Text(if (isArabic) "مركز الأدوات" else "Tools Center") }, onClick = { selectedTab = 1; showHubMenu = false })
+                            }
                         }
                     }
                 )
             },
-            bottomBar = {
+            bottomBar = if (selectedTab == 0) null else {
                 NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
                     NavigationBarItem(
                         selected = selectedTab == 2,
@@ -165,7 +173,7 @@ fun HubApp() {
                     onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463D2D)
                 )) {
                     Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxSize().padding(padding)) {
-                        ChatHomeScreen(isArabic = isArabic)
+                        ChatHomeScreen(isArabic = isArabic, openAiSettings = requestChatAiSettings, onAiSettingsConsumed = { requestChatAiSettings = false })
                     }
                 }
             } else SelectionContainer {

@@ -10,6 +10,8 @@ import com.aiuniversalhub.background.BackgroundTaskService
 import com.aiuniversalhub.chat.ChatHomeScreen
 import com.aiuniversalhub.registry.ToolLibraryScreen
 import com.aiuniversalhub.integrations.McpHttpClient
+import com.aiuniversalhub.integrations.GitHubAgentScreen
+import com.aiuniversalhub.runtime.RuntimeCenterScreen
 import com.aiuniversalhub.data.SecureStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

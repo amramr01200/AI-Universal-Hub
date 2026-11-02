@@ -3,8 +3,6 @@ package com.aiuniversalhub.registry
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -29,8 +27,8 @@ fun ToolLibraryScreen(isArabic: Boolean) {
         if (tools.isEmpty()) {
             Text(if (isArabic) "لم تضف أدوات بعد." else "No saved tools yet.")
         }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(tools, key = { it.id }) { tool ->
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            tools.forEach { tool ->
                 Card {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(tool.name, style = MaterialTheme.typography.titleMedium)

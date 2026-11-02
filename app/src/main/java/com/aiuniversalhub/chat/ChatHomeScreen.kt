@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.aiuniversalhub.data.SecureStore
 import com.aiuniversalhub.net.AiClient
+import com.aiuniversalhub.net.LiveSearchClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -109,6 +110,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var modelOptions by remember { mutableStateOf(store.getModels(initialProvider.first.lowercase().replace(" ", "-"))) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showLiveSearch by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var usageLabel by remember { mutableStateOf("") }
@@ -252,6 +254,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                     Text("AI Universal Hub", style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color(0xFF9B762F))
                     Text(selected.title, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                 }
+                TextButton(onClick = { showLiveSearch = true }) { Text("⌕", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
                 TextButton(onClick = { showSettings = true }) { Text("⚙", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -389,6 +392,10 @@ fun ChatHomeScreen(isArabic: Boolean) {
                 }
             }
         }
+    }
+
+    if (showLiveSearch) {
+        LiveSearchDialog(isArabic = isArabic, onDismiss = { showLiveSearch = false })
     }
 
     if (showSettings) {
@@ -584,4 +591,63 @@ fun ChatHomeScreen(isArabic: Boolean) {
             )
         }
     }
+}
+
+@Composable
+private fun LiveSearchDialog(isArabic: Boolean, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val secure = remember { SecureStore(context) }
+    val searchClient = remember { LiveSearchClient() }
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var key by remember { mutableStateOf(secure.getApiKey("live-search-brave").orEmpty()) }
+    var results by remember { mutableStateOf(emptyList<com.aiuniversalhub.net.SearchHit>()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isArabic) "البحث الحي على الويب" else "Live web search") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isArabic) "ابحثي في المواقع" else "Search the web") })
+                OutlinedTextField(key, { key = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Brave Search API key") }, singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                Text(if (isArabic) "المفتاح يُحفظ مشفرًا على الجهاز. يلزم حساب Brave Search API؛ لا يوجد بحث مجاني مضمون." else "The key is encrypted on-device. A Brave Search API account is required; free availability is not guaranteed.",
+                    style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        if (key.isBlank()) secure.deleteApiKey("live-search-brave")
+                        else secure.saveApiKey("live-search-brave", key.trim())
+                        error = if (isArabic) "تم حفظ إعدادات البحث." else "Search settings saved."
+                    }) { Text(if (isArabic) "حفظ المفتاح" else "Save key") }
+                    Button(enabled = !loading && query.isNotBlank() && key.isNotBlank(), onClick = {
+                        secure.saveApiKey("live-search-brave", key.trim())
+                        loading = true
+                        error = ""
+                        scope.launch {
+                            try {
+                                results = withContext(Dispatchers.IO) { searchClient.search(query, key) }
+                                if (results.isEmpty()) error = if (isArabic) "لم تظهر نتائج." else "No results found."
+                            } catch (e: Exception) { error = e.message ?: "Search failed" }
+                            loading = false
+                        }
+                    }) { Text(if (loading) (if (isArabic) "جاري البحث…" else "Searching…") else (if (isArabic) "بحث" else "Search")) }
+                }
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                results.forEach { hit ->
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        TextButton(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(hit.url)))
+                        }) { Text(hit.title, maxLines = 2) }
+                        Text(hit.description, style = MaterialTheme.typography.bodySmall, maxLines = 3)
+                        Text(hit.url, style = MaterialTheme.typography.labelSmall)
+                    }
+                    HorizontalDivider()
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(if (isArabic) "إغلاق" else "Close") } }
+    )
 }

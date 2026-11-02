@@ -119,6 +119,7 @@ fun HubApp() {
     var topSelectedModel by remember { mutableStateOf("") }
     var topModelOptions by remember { mutableStateOf(emptyList<String>()) }
     var topModelMenuExpanded by remember { mutableStateOf(false) }
+    var topTokenCount by remember { mutableStateOf("—") }
 
     MaterialTheme(colorScheme = hubColors) {
         Scaffold(
@@ -137,7 +138,7 @@ fun HubApp() {
                                 enabled = topModelOptions.isNotEmpty()
                             ) {
                                 Text(
-                                    topSelectedModel.ifBlank { if (isArabic) "اختيار النموذج" else "Choose model" },
+                                    (topSelectedModel.ifBlank { if (isArabic) "لا يوجد نموذج" else "No model" }) + "  ▾",
                                     color = hubColors.secondary,
                                     maxLines = 1
                                 )
@@ -159,6 +160,7 @@ fun HubApp() {
                         }
                     },
                     actions = {
+                        Text("T $topTokenCount", color = hubColors.secondary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 8.dp))
                         Box {
                             IconButton(onClick = { showHubMenu = true }) {
                                 Text("⚙", color = hubColors.secondary, style = MaterialTheme.typography.titleLarge)
@@ -205,7 +207,7 @@ fun HubApp() {
                     onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463D2D)
                 )) {
                     Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxSize().padding(padding)) {
-                        ChatHomeScreen(isArabic = isArabic, openAiSettings = requestChatAiSettings, onAiSettingsConsumed = { requestChatAiSettings = false }, topSelectedModel = topSelectedModel, onTopModelSelected = { topSelectedModel = it }, onTopModelOptionsChanged = { model, options -> topSelectedModel = model; topModelOptions = options })
+                        ChatHomeScreen(isArabic = isArabic, openAiSettings = requestChatAiSettings, onAiSettingsConsumed = { requestChatAiSettings = false }, topSelectedModel = topSelectedModel, onTopModelSelected = { topSelectedModel = it }, onTopModelOptionsChanged = { model, options -> topSelectedModel = model; topModelOptions = options }, onTopTokenCountChanged = { topTokenCount = it })
                     }
                 }
             } else SelectionContainer {

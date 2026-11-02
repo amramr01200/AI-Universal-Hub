@@ -88,7 +88,7 @@ fun HubApp() {
         Scaffold(
             containerColor = hubColors.background,
             topBar = {
-                TopAppBar(
+                if (selectedTab != 0) TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = androidx.compose.ui.graphics.Color(0xFF050505),
                         titleContentColor = hubColors.secondary,
@@ -106,7 +106,7 @@ fun HubApp() {
                 )
             },
             bottomBar = {
-                NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
+                if (selectedTab != 0) NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
                     NavigationBarItem(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
@@ -128,28 +128,26 @@ fun HubApp() {
                 }
             }
         ) { padding ->
-            LazyColumn(
+            if (selectedTab == 0) {
+                MaterialTheme(colorScheme = androidx.compose.material3.lightColorScheme(
+                    primary = androidx.compose.ui.graphics.Color(0xFFB08A3E),
+                    secondary = androidx.compose.ui.graphics.Color(0xFFD6B56D),
+                    background = androidx.compose.ui.graphics.Color.White,
+                    surface = androidx.compose.ui.graphics.Color.White,
+                    onBackground = androidx.compose.ui.graphics.Color(0xFF211A1E),
+                    onSurface = androidx.compose.ui.graphics.Color(0xFF211A1E),
+                    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF4F0E7),
+                    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463D2D)
+                )) {
+                    Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxSize().padding(padding)) {
+                        ChatHomeScreen(isArabic = isArabic)
+                    }
+                }
+            } else LazyColumn(
                 modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (selectedTab == 0) {
-                    item {
-                        MaterialTheme(colorScheme = androidx.compose.material3.lightColorScheme(
-                            primary = androidx.compose.ui.graphics.Color(0xFFB08A3E),
-                            secondary = androidx.compose.ui.graphics.Color(0xFFD6B56D),
-                            background = androidx.compose.ui.graphics.Color.White,
-                            surface = androidx.compose.ui.graphics.Color.White,
-                            onBackground = androidx.compose.ui.graphics.Color(0xFF211A1E),
-                            onSurface = androidx.compose.ui.graphics.Color(0xFF211A1E),
-                            surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF4F0E7),
-                            onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463D2D)
-                        )) {
-                            Surface(color = androidx.compose.ui.graphics.Color.White) {
-                                ChatHomeScreen(isArabic = isArabic)
-                            }
-                        }
-                    }
-                } else if (selectedTab == 1) {
+                if (selectedTab == 1) {
                     item {
                         Text(if (isArabic) "مركز الأدوات" else "Tools Center", style = MaterialTheme.typography.headlineSmall)
                         Text(if (isArabic) "لن يتم تثبيت أو تشغيل أي أداة بصلاحيات خاصة دون موافقتك." else "No tool will be installed or granted special permissions without your approval.")

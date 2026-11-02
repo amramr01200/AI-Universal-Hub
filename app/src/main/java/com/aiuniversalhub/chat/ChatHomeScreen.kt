@@ -391,6 +391,52 @@ fun ChatHomeScreen(isArabic: Boolean) {
             title = { Text(if (isArabic) "إعدادات مزود الذكاء الاصطناعي" else "AI provider settings") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    var showProviderNetworks by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = { showProviderNetworks = !showProviderNetworks }) {
+                        Text(if (isArabic) "◎ شبكات ومزوّدو الخدمات الخارجية" else "◎ External provider networks")
+                    }
+                    if (showProviderNetworks) {
+                        Text(if (isArabic)
+                            "اختاري مزودًا لفتح كتالوج موديلاته أو صفحة إنشاء مفتاح API. بعد إنشاء المفتاح، اختاري المزود من القائمة وأضيفي عنوانه ومفتاحه."
+                            else "Open a provider's model catalog or API-key page. After creating a key, select the provider and enter its endpoint and key.",
+                            style = MaterialTheme.typography.bodySmall)
+                        val networkProviders = listOf(
+                            Triple("OpenRouter", "https://openrouter.ai/api/v1", "https://openrouter.ai/models|https://openrouter.ai/settings/keys"),
+                            Triple("OpenAI", "https://api.openai.com/v1", "https://platform.openai.com/docs/models|https://platform.openai.com/api-keys"),
+                            Triple("Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "https://ai.google.dev/gemini-api/docs/models|https://aistudio.google.com/app/apikey"),
+                            Triple("Groq", "https://api.groq.com/openai/v1", "https://console.groq.com/docs/models|https://console.groq.com/keys"),
+                            Triple("DeepSeek", "https://api.deepseek.com/v1", "https://api-docs.deepseek.com/|https://platform.deepseek.com/api_keys"),
+                            Triple("Mistral AI", "https://api.mistral.ai/v1", "https://docs.mistral.ai/getting-started/models/|https://console.mistral.ai/api-keys/"),
+                            Triple("Together AI", "https://api.together.xyz/v1", "https://www.together.ai/models|https://api.together.ai/settings/api-keys")
+                        )
+                        networkProviders.forEach { entry ->
+                            val links = entry.third.split("|")
+                            Card {
+                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(entry.first, style = MaterialTheme.typography.titleSmall)
+                                    Text((if (isArabic) "عنوان API: " else "API: ") + entry.second,
+                                        style = MaterialTheme.typography.bodySmall)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        TextButton(onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(links[0])))
+                                        }) { Text(if (isArabic) "الموديلات" else "Models") }
+                                        TextButton(onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(links[1])))
+                                        }) { Text(if (isArabic) "مفتاح API" else "API key") }
+                                        TextButton(onClick = {
+                                            providerName = entry.first
+                                            baseUrl = entry.second
+                                            apiKey = ""
+                                        }) { Text(if (isArabic) "اختيار" else "Select") }
+                                    }
+                                }
+                            }
+                        }
+                        Text(if (isArabic)
+                            "تنبيه: وجود موديل في الكتالوج لا يعني أنه مجاني. تحققي من الأسعار والحدود قبل الاستخدام. مفتاح API مختلف عن اشتراك ChatGPT."
+                            else "A model appearing in a catalog does not mean it is free. Check pricing and limits. API keys are separate from ChatGPT subscriptions.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
                     var providerExpanded by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(expanded = providerExpanded, onExpandedChange = { providerExpanded = !providerExpanded }) {
                         OutlinedTextField(providerName, {}, readOnly = true,

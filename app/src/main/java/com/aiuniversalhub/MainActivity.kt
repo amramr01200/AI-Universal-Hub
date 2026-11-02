@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.aiuniversalhub.background.BackgroundTaskService
+import com.aiuniversalhub.registry.ToolLibraryScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -92,6 +93,12 @@ fun HubApp() {
                         label = { Text(if (isArabic) "الأدوات" else "Tools") },
                         icon = { Text("⚙") }
                     )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        label = { Text(if (isArabic) "مكتبتي" else "My Library") },
+                        icon = { Text("▣") }
+                    )
                 }
             }
         ) { padding ->
@@ -125,7 +132,7 @@ fun HubApp() {
                             Text(if (isArabic) "فتح مركز الأدوات" else "Open Tools Center")
                         }
                     }
-                } else {
+                } else if (selectedTab == 1) {
                     item {
                         Text(if (isArabic) "مركز الأدوات" else "Tools Center", style = MaterialTheme.typography.headlineSmall)
                         Text(if (isArabic) "لن يتم تثبيت أو تشغيل أي أداة بصلاحيات خاصة دون موافقتك." else "No tool will be installed or granted special permissions without your approval.")

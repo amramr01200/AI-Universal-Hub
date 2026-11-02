@@ -69,20 +69,44 @@ fun HubApp() {
             "Integration planned", "التكامل قيد التطوير")
     )
 
-    MaterialTheme {
+    val hubColors = darkColorScheme(
+        primary = androidx.compose.ui.graphics.Color(0xFFFF6FAE),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFF160B12),
+        secondary = androidx.compose.ui.graphics.Color(0xFFD6B56D),
+        onSecondary = androidx.compose.ui.graphics.Color(0xFF17120A),
+        tertiary = androidx.compose.ui.graphics.Color(0xFFE7C982),
+        background = androidx.compose.ui.graphics.Color(0xFF080808),
+        onBackground = androidx.compose.ui.graphics.Color(0xFFF5F0F3),
+        surface = androidx.compose.ui.graphics.Color(0xFF151216),
+        onSurface = androidx.compose.ui.graphics.Color(0xFFF5F0F3),
+        surfaceVariant = androidx.compose.ui.graphics.Color(0xFF28212A),
+        onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFFE2D7DF)
+    )
+    var showAppSettings by remember { mutableStateOf(false) }
+
+    MaterialTheme(colorScheme = hubColors) {
         Scaffold(
+            containerColor = hubColors.background,
             topBar = {
                 TopAppBar(
-                    title = { Text("AI Universal Hub") },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFF050505),
+                        titleContentColor = hubColors.secondary,
+                        actionIconContentColor = hubColors.secondary
+                    ),
+                    title = { Text("AI Universal Hub", color = hubColors.secondary) },
                     actions = {
+                        TextButton(onClick = { showAppSettings = true }) {
+                            Text("⚙", color = hubColors.secondary, style = MaterialTheme.typography.titleLarge)
+                        }
                         TextButton(onClick = { isArabic = !isArabic }) {
-                            Text(if (isArabic) "English" else "العربية")
+                            Text(if (isArabic) "English" else "العربية", color = hubColors.primary)
                         }
                     }
                 )
             },
             bottomBar = {
-                NavigationBar {
+                NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
                     NavigationBarItem(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
@@ -109,7 +133,22 @@ fun HubApp() {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (selectedTab == 0) {
-                    item { ChatHomeScreen(isArabic = isArabic) }
+                    item {
+                        MaterialTheme(colorScheme = androidx.compose.material3.lightColorScheme(
+                            primary = androidx.compose.ui.graphics.Color(0xFFB84F83),
+                            secondary = androidx.compose.ui.graphics.Color(0xFFB08A3E),
+                            background = androidx.compose.ui.graphics.Color.White,
+                            surface = androidx.compose.ui.graphics.Color.White,
+                            onBackground = androidx.compose.ui.graphics.Color(0xFF211A1E),
+                            onSurface = androidx.compose.ui.graphics.Color(0xFF211A1E),
+                            surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF4EEF1),
+                            onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463B42)
+                        )) {
+                            Surface(color = androidx.compose.ui.graphics.Color.White) {
+                                ChatHomeScreen(isArabic = isArabic)
+                            }
+                        }
+                    }
                 } else if (selectedTab == 1) {
                     item {
                         Text(if (isArabic) "مركز الأدوات" else "Tools Center", style = MaterialTheme.typography.headlineSmall)
@@ -161,6 +200,26 @@ fun HubApp() {
                     item { RuntimeCenterScreen(isArabic = isArabic) }
                 }
             }
+        }
+        if (showAppSettings) {
+            AlertDialog(
+                onDismissRequest = { showAppSettings = false },
+                containerColor = hubColors.surface,
+                titleContentColor = hubColors.secondary,
+                textContentColor = hubColors.onSurface,
+                title = { Text(if (isArabic) "إعدادات التطبيق" else "App settings") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (isArabic) "المظهر: أسود أنيق مع لمسات ذهبية ووردية." else "Theme: elegant black with gold and pink accents.")
+                        Text(if (isArabic) "شاشة المحادثة: خلفية بيضاء." else "Chat screen: white background.")
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showAppSettings = false }) {
+                        Text(if (isArabic) "تم" else "Done", color = hubColors.primary)
+                    }
+                }
+            )
         }
     }
 }

@@ -46,6 +46,28 @@ class AiClient {
         }.distinct().sorted()
     }
 
+    fun chatWithImage(baseUrl: String, apiKey: String, model: String, message: String, mimeType: String, imageBase64: String): String {
+        require(model.isNotBlank()) { "Select a model before sending a message." }
+        val content = JSONArray()
+            .put(JSONObject().put("type", "text").put("text", message.ifBlank { "Describe this image." }))
+            .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:$mimeType;base64,$imageBase64")))
+        val payload = JSONObject().put("model", model).put(
+            "messages",
+            JSONArray().put(JSONObject().put("role", "user").put("content", content))
+        )
+        val requestBuilder = Request.Builder().url(endpoint(baseUrl, "/chat/completions"))
+        if (apiKey.isNotBlank()) requestBuilder.header("Authorization", "Bearer $apiKey")
+        val request = requestBuilder.post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+        http.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val detail = try { JSONObject(body).optString("message").ifBlank { JSONObject(body).optString("error") } } catch (_: Exception) { "" }
+                error("Provider HTTP ${response.code}" + if (detail.isNotBlank()) ": ${detail.take(240)}" else "")
+            }
+            return body.ifBlank { "{}" }
+        }
+    }
+
     fun chat(baseUrl: String, apiKey: String, model: String, message: String): String {
         require(model.isNotBlank()) { "Select a model before sending a message." }
         val payload = JSONObject()

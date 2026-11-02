@@ -32,6 +32,9 @@ import org.json.JSONObject
 import org.json.JSONArray
 
 private data class ChatMessage(val role: String, val content: String)
+
+private fun providerStorageId(name: String, providers: List<com.aiuniversalhub.data.SavedProvider>): String =
+    providers.firstOrNull { it.name == name }?.id ?: name.lowercase().replace(" ", "-")
 private data class ChatThread(
     val id: Int,
     val title: String,
@@ -100,16 +103,16 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var registeredProviders by remember { mutableStateOf(store.listProviders()) }
     val allProviderOptions = providerOptions + registeredProviders.map { Triple(it.name, it.baseUrl, true) }
     val initialProvider = allProviderOptions.firstOrNull {
-        it.first.lowercase().replace(" ", "-") == store.getSelectedProvider()
+        providerStorageId(it.first, registeredProviders) == store.getSelectedProvider()
     } ?: providerOptions.first()
     var providerName by remember { mutableStateOf(initialProvider.first) }
     var showAddProvider by remember { mutableStateOf(false) }
     var newProviderName by remember { mutableStateOf("") }
     var newProviderUrl by remember { mutableStateOf("") }
     var newProviderKey by remember { mutableStateOf("") }
-    var baseUrl by remember { mutableStateOf(store.getProviderUrl(initialProvider.first.lowercase().replace(" ", "-"), initialProvider.second)) }
-    var apiKey by remember { mutableStateOf(store.getApiKey(initialProvider.first.lowercase().replace(" ", "-")) ?: "") }
-    var modelOptions by remember { mutableStateOf(store.getModels(initialProvider.first.lowercase().replace(" ", "-"))) }
+    var baseUrl by remember { mutableStateOf(store.getProviderUrl(providerStorageId(initialProvider.first, registeredProviders), initialProvider.second)) }
+    var apiKey by remember { mutableStateOf(store.getApiKey(providerStorageId(initialProvider.first, registeredProviders)) ?: "") }
+    var modelOptions by remember { mutableStateOf(store.getModels(providerStorageId(initialProvider.first, registeredProviders))) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showLiveSearch by remember { mutableStateOf(false) }
@@ -137,7 +140,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
 
     fun updateSelectedModel(value: String) {
         threads = threads.map { if (it.id == selectedId) it.copy(model = value) else it }
-        store.saveSelectedModel(providerName.lowercase().replace(" ", "-"), value)
+        store.saveSelectedModel(providerStorageId(providerName, registeredProviders), value)
     }
 
     fun sendMessage() {
@@ -170,7 +173,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                             if (isArabic) "حجم الصورة أكبر من 12 ميجابايت." else "Image is larger than 12 MB."
                         }
                         val mime = context.contentResolver.getType(imageUri) ?: "image/jpeg"
-                        client.chatWithImage(baseUrl, apiKey, selectedModel, prompt, mime, Base64.encodeToString(bytes, Base64.NO_WRAP))
+                        client.chatWithImageHistory(baseUrl, apiKey, selectedModel, updated.messages.dropLast(1).map { it.role to it.content }, prompt, mime, Base64.encodeToString(bytes, Base64.NO_WRAP))
                     } else {
                         val history = updated.messages.map { it.role to it.content }
                         client.chatWithHistory(baseUrl, apiKey, selectedModel, history)
@@ -276,7 +279,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                                 val raw = withContext(Dispatchers.IO) { client.listModels(baseUrl, apiKey) }
                                 val found = client.parseModelIds(raw)
                                 modelOptions = found
-                                store.saveModels(providerName.lowercase().replace(" ", "-"), found)
+                                store.saveModels(providerStorageId(providerName, registeredProviders), found)
                                 if (found.isNotEmpty() && selectedModel !in found) updateSelectedModel(found.first())
                                 status = if (found.isEmpty()) (if (isArabic) "المزود لم يرجع نماذج." else "No models returned.") else (if (isArabic) "تم تحميل ${found.size} نموذج" else "Loaded ${found.size} models")
                             } catch (e: Exception) { status = e.message ?: "Connection failed" }
@@ -404,7 +407,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
     if (showTaskManager) {
         BackgroundTaskDialog(
             isArabic = isArabic,
-            providerId = providerName.lowercase().replace(" ", "-"),
+            providerId = providerStorageId(providerName, registeredProviders),
             providerName = providerName,
             model = selectedModel,
             onDismiss = { showTaskManager = false }
@@ -473,7 +476,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                             allProviderOptions.forEach { option ->
                                 DropdownMenuItem(text = { Text(option.first) }, onClick = {
                                     providerName = option.first
-                                    val id = option.first.lowercase().replace(" ", "-")
+                                    val id = providerStorageId(option.first, registeredProviders)
                                     baseUrl = store.getProviderUrl(id, option.second)
                                     apiKey = store.getApiKey(id) ?: ""
                                     modelOptions = store.getModels(id)
@@ -548,7 +551,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val keyId = providerName.lowercase().replace(" ", "-")
+                    val keyId = providerStorageId(providerName, registeredProviders)
                     store.saveProviderUrl(keyId, baseUrl.trim())
                     if (apiKey.isNotBlank()) store.saveApiKey(keyId, apiKey.trim()) else store.deleteApiKey(keyId)
                     store.saveSelectedProvider(keyId)

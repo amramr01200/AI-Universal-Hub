@@ -1,8 +1,6 @@
 package com.aiuniversalhub.runtime
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -10,7 +8,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun RuntimeCenterScreen(isArabic: Boolean) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(if (isArabic) "بيئة التشغيل والتحديثات" else "Runtime & Updates", style = MaterialTheme.typography.headlineSmall)
         Text(if (isArabic) "كتالوج المكونات الأساسية المقترحة. التثبيت والتحديث الفعليان يحتاجان ربط محرك الحزم ببيئة تشغيل متوافقة." else "Curated core components. Actual installation and updates require connecting the package engine to a compatible runtime.")
         Card {

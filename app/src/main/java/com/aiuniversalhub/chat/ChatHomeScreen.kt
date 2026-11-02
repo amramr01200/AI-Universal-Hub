@@ -94,7 +94,7 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatHomeScreen(isArabic: Boolean) {
+fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSettingsConsumed: () -> Unit = {}) {
     val context = LocalContext.current
     val store = remember { SecureStore(context) }
     val client = remember { AiClient() }
@@ -142,6 +142,13 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var status by remember { mutableStateOf("") }
     var usageLabel by remember { mutableStateOf("") }
     var pendingImage by remember { mutableStateOf<Uri?>(null) }
+
+    LaunchedEffect(openAiSettings) {
+        if (openAiSettings) {
+            showSettings = true
+            onAiSettingsConsumed()
+        }
+    }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         pendingImage = uri
@@ -283,7 +290,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                 }
                 TextButton(onClick = { showTaskManager = true }) { Text("◷", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
                 TextButton(onClick = { showLiveSearch = true }) { Text("⌕", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
-                TextButton(onClick = { showSettings = true }) { Text("⚙", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
+
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

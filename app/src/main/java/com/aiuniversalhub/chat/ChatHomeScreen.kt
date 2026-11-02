@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import com.aiuniversalhub.data.SecureStore
 import com.aiuniversalhub.net.AiClient
 import com.aiuniversalhub.net.LiveSearchClient
+import com.aiuniversalhub.tasks.TaskScheduler
+import com.aiuniversalhub.tasks.TaskRecordStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -111,6 +113,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var modelMenuExpanded by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showLiveSearch by remember { mutableStateOf(false) }
+    var showTaskManager by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var usageLabel by remember { mutableStateOf("") }
@@ -254,6 +257,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
                     Text("AI Universal Hub", style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color(0xFF9B762F))
                     Text(selected.title, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                 }
+                TextButton(onClick = { showTaskManager = true }) { Text("◷", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
                 TextButton(onClick = { showLiveSearch = true }) { Text("⌕", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
                 TextButton(onClick = { showSettings = true }) { Text("⚙", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
             }
@@ -396,6 +400,15 @@ fun ChatHomeScreen(isArabic: Boolean) {
 
     if (showLiveSearch) {
         LiveSearchDialog(isArabic = isArabic, onDismiss = { showLiveSearch = false })
+    }
+    if (showTaskManager) {
+        BackgroundTaskDialog(
+            isArabic = isArabic,
+            providerId = providerName.lowercase().replace(" ", "-"),
+            providerName = providerName,
+            model = selectedModel,
+            onDismiss = { showTaskManager = false }
+        )
     }
 
     if (showSettings) {
@@ -649,5 +662,57 @@ private fun LiveSearchDialog(isArabic: Boolean, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(if (isArabic) "إغلاق" else "Close") } }
+    )
+}
+
+@Composable
+private fun BackgroundTaskDialog(
+    isArabic: Boolean,
+    providerId: String,
+    providerName: String,
+    model: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var title by remember { mutableStateOf("") }
+    var prompt by remember { mutableStateOf("") }
+    var tasks by remember { mutableStateOf(TaskRecordStore(context).all()) }
+    var error by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isArabic) "المهام الخلفية" else "Background tasks") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (isArabic) "المزوّد الحالي: $providerName • النموذج: $model" else "Provider: $providerName • Model: $model",
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(title, { title = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isArabic) "عنوان المهمة" else "Task title") }, singleLine = true)
+                OutlinedTextField(prompt, { prompt = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isArabic) "تعليمات المهمة" else "Task instructions") }, minLines = 3)
+                Button(enabled = title.isNotBlank() && prompt.isNotBlank() && model.isNotBlank(), onClick = {
+                    try {
+                        TaskScheduler.enqueue(context, title, prompt, providerId, model)
+                        tasks = TaskRecordStore(context).all()
+                        title = ""; prompt = ""
+                        error = if (isArabic) "تمت جدولة المهمة؛ ستعمل عند توفر الإنترنت." else "Task queued; it will run when network is available."
+                    } catch (e: Exception) { error = e.message ?: "Could not queue task." }
+                }) { Text(if (isArabic) "جدولة المهمة" else "Queue task") }
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.secondary)
+                HorizontalDivider()
+                Text(if (isArabic) "سجل المهام" else "Task history", style = MaterialTheme.typography.titleSmall)
+                tasks.take(8).forEach { task ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(task.title, style = MaterialTheme.typography.labelLarge)
+                        Text("${task.state} • ${task.progress}%", style = MaterialTheme.typography.labelSmall)
+                        Text(task.detail, style = MaterialTheme.typography.bodySmall, maxLines = 4)
+                    }
+                    HorizontalDivider()
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { tasks = TaskRecordStore(context).all() }) { Text(if (isArabic) "تحديث السجل" else "Refresh") }
+            TextButton(onClick = onDismiss) { Text(if (isArabic) "إغلاق" else "Close") }
+        }
     )
 }

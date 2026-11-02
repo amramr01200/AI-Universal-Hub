@@ -31,9 +31,16 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var selectedId by remember { mutableIntStateOf(1) }
     var nextId by remember { mutableIntStateOf(2) }
     var draft by remember { mutableStateOf("") }
+    val providerOptions = listOf(
+        "OpenAI-compatible" to "https://api.openai.com/v1",
+        "OpenRouter" to "https://openrouter.ai/api/v1",
+        "LiteLLM" to "http://localhost:4000/v1",
+        "Ollama" to "http://localhost:11434/v1",
+        "FreeLLMAPI" to ""
+    )
     var providerName by remember { mutableStateOf("OpenAI-compatible") }
     var baseUrl by remember { mutableStateOf("https://api.openai.com/v1") }
-    var apiKey by remember { mutableStateOf(store.getApiKey("custom") ?: "") }
+    var apiKey by remember { mutableStateOf(store.getApiKey("openai-compatible") ?: "") }
     var model by remember { mutableStateOf("gpt-4o-mini") }
     var modelOptions by remember { mutableStateOf(listOf("gpt-4o-mini")) }
     var showSettings by remember { mutableStateOf(false) }
@@ -146,9 +153,24 @@ fun ChatHomeScreen(isArabic: Boolean) {
             title = { Text(if (isArabic) "إعدادات مزود الذكاء الاصطناعي" else "AI provider settings") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (isArabic) "واجهة متوافقة مع OpenAI" else "OpenAI-compatible API")
+                    var providerExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(expanded = providerExpanded, onExpandedChange = { providerExpanded = !providerExpanded }) {
+                        OutlinedTextField(providerName, { }, readOnly = true, label = { Text(if (isArabic) "المزود" else "Provider") }, modifier = Modifier.menuAnchor().fillMaxWidth(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerExpanded) })
+                        ExposedDropdownMenu(expanded = providerExpanded, onDismissRequest = { providerExpanded = false }) {
+                            providerOptions.forEach { option ->
+                                DropdownMenuItem(text = { Text(option.first) }, onClick = {
+                                    providerName = option.first
+                                    if (option.second.isNotBlank()) baseUrl = option.second
+                                    apiKey = store.getApiKey(option.first.lowercase().replace(" ", "-")) ?: ""
+                                    providerExpanded = false
+                                })
+                            }
+                        }
+                    }
                     OutlinedTextField(baseUrl, { baseUrl = it }, label = { Text("Base URL") }, singleLine = true)
                     OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key") }, singleLine = true)
+                    Text(if (isArabic) "عنوان API" else "API endpoint")
+                    Text(if (isArabic) "يمكن تعديل العنوان ليتوافق مع المزود أو الخادم المحلي." else "You can customize this URL for your provider or local host.", style = MaterialTheme.typography.bodySmall)
                     Text(if (isArabic) "النموذج" else "Model")
                     var expanded by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
@@ -162,7 +184,7 @@ fun ChatHomeScreen(isArabic: Boolean) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (apiKey.isNotBlank()) store.saveApiKey("custom", apiKey.trim()) else store.deleteApiKey("custom")
+                    val keyId = providerName.lowercase().replace(" ", "-")\n                    if (apiKey.isNotBlank()) store.saveApiKey(keyId, apiKey.trim()) else store.deleteApiKey(keyId)
                     showSettings = false
                     status = if (isArabic) "تم حفظ إعدادات المزود على الجهاز." else "Provider settings saved on this device."
                 }) { Text(if (isArabic) "حفظ" else "Save") }

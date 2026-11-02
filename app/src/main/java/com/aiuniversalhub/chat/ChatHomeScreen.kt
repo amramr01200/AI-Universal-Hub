@@ -284,19 +284,31 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                     Text("☰", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.headlineSmall)
                 }
-                Column(Modifier.weight(1f)) {
-                    Text("AI Universal Hub", style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color(0xFF9B762F))
-                    Text(selected.title, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                }
-                TextButton(onClick = { showTaskManager = true }) { Text("◷", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
-                TextButton(onClick = { showLiveSearch = true }) { Text("⌕", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
-
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("$providerName • ${selectedModel.ifBlank { if (isArabic) "لم يتم اختيار نموذج" else "No model selected" }}", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-                    val estimatedTokens = selected.messages.sumOf { it.content.length }.let { (it + 3) / 4 }
-                    Text((if (isArabic) "السياق تقديريًا: " else "Estimated context: ") + "$estimatedTokens " + (if (isArabic) "توكن" else "tokens"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    ExposedDropdownMenuBox(
+                        expanded = modelMenuExpanded,
+                        onExpandedChange = { modelMenuExpanded = !modelMenuExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedModel.ifBlank { if (isArabic) "اختاري النموذج" else "Choose a model" },
+                            onValueChange = {},
+                            readOnly = true,
+                            enabled = modelOptions.isNotEmpty(),
+                            label = { Text(if (isArabic) "النموذج الحالي" else "Current model") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelMenuExpanded) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(expanded = modelMenuExpanded, onDismissRequest = { modelMenuExpanded = false }) {
+                            modelOptions.forEach { option ->
+                                DropdownMenuItem(text = { Text(option) }, onClick = {
+                                    updateSelectedModel(option)
+                                    modelMenuExpanded = false
+                                })
+                            }
+                        }
+                    }
+                    Text(selected.title, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
                 TextButton(onClick = {
                     if (baseUrl.isBlank()) status = if (isArabic) "أدخلي رابط المزود في إعدادات AI." else "Enter provider URL in AI settings."
@@ -314,25 +326,19 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                             busy = false
                         }
                     }
-                }, enabled = !busy) { Text(if (isArabic) "النماذج" else "Models") }
+                }, enabled = !busy) { Text("↻") }
+                TextButton(onClick = { showTaskManager = true }) { Text("◷", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
+                TextButton(onClick = { showLiveSearch = true }) { Text("⌕", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.titleLarge) }
+
             }
-            ExposedDropdownMenuBox(
-                expanded = modelMenuExpanded,
-                onExpandedChange = { modelMenuExpanded = !modelMenuExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = selectedModel.ifBlank { if (isArabic) "اختاري النموذج" else "Choose a model" },
-                    onValueChange = {}, readOnly = true, enabled = modelOptions.isNotEmpty(),
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelMenuExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(), singleLine = true
-                )
-                ExposedDropdownMenu(expanded = modelMenuExpanded, onDismissRequest = { modelMenuExpanded = false }) {
-                    modelOptions.forEach { option ->
-                        DropdownMenuItem(text = { Text(option) }, onClick = { updateSelectedModel(option); modelMenuExpanded = false })
-                    }
-                }
-            }
+            Text(
+                (if (isArabic) "المزود: " else "Provider: ") + providerName + " • " +
+                    (if (isArabic) "السياق تقديريًا: " else "Estimated context: ") +
+                    selected.messages.sumOf { it.content.length }.let { (it + 3) / 4 } +
+                    (if (isArabic) " توكن" else " tokens"),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
             HorizontalDivider()
             LazyColumn(
                 state = messageListState,

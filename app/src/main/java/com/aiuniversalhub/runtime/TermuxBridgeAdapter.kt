@@ -27,7 +27,7 @@ object TermuxBridgeAdapter {
     fun canRunCommands(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, "com.termux.permission.RUN_COMMAND") == PackageManager.PERMISSION_GRANTED
 
-    fun sendApprovedCommand(context: Context, componentId: String): Result {
+    fun sendApprovedCommand(context: Context, componentId: String, conversationId: Int = -1): Result {
         if (!isInstalled(context)) return Result(false, "Termux is not installed.")
         if (!canRunCommands(context)) return Result(false, "Grant Termux RUN_COMMAND permission to AI Universal Hub, then retry.")
         val component = RuntimeCatalog.components.firstOrNull { it.id == componentId }
@@ -36,11 +36,11 @@ object TermuxBridgeAdapter {
         if (command !in RuntimeCatalog.components.map { it.installCommand }.toSet()) {
             return Result(false, "Command is not in the approved package catalog.")
         }
-        return submit(context, command, "/data/data/com.termux/files/home", "catalog:$componentId")
+        return submit(context, command, "/data/data/com.termux/files/home", "catalog:$componentId", conversationId)
     }
 
     // Fixed, read-only diagnostics only; no arbitrary shell input is accepted.
-    fun sendDiagnostic(context: Context, diagnosticId: String): Result {
+    fun sendDiagnostic(context: Context, diagnosticId: String, conversationId: Int = -1): Result {
         if (!isInstalled(context)) return Result(false, "Termux is not installed.")
         if (!canRunCommands(context)) return Result(false, "Grant Termux RUN_COMMAND permission to AI Universal Hub, then retry.")
         val command = when (diagnosticId) {
@@ -50,14 +50,14 @@ object TermuxBridgeAdapter {
             "list_home" -> "ls -la"
             else -> return Result(false, "Diagnostic is not allowlisted.")
         }
-        return submit(context, command, "/data/data/com.termux/files/home", "diagnostic:$diagnosticId")
+        return submit(context, command, "/data/data/com.termux/files/home", "diagnostic:$diagnosticId", conversationId)
     }
 
-    private fun submit(context: Context, command: String, workDir: String, label: String): Result {
+    private fun submit(context: Context, command: String, workDir: String, label: String, conversationId: Int): Result {
         val requestCode = requestIds.incrementAndGet()
         val callbackIntent = Intent(context, TermuxResultReceiver::class.java).apply {
-            action = TermuxResultReceiver.ACTION_RESULT
             putExtra(TermuxResultReceiver.EXTRA_LABEL, label)
+            putExtra(TermuxResultReceiver.EXTRA_CONVERSATION_ID, conversationId)
         }
         val flags = PendingIntent.FLAG_ONE_SHOT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0

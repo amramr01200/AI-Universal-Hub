@@ -94,7 +94,7 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSettingsConsumed: () -> Unit = {}) {
+fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSettingsConsumed: () -> Unit = {}, topSelectedModel: String = "", onTopModelSelected: (String) -> Unit = {}, onTopModelOptionsChanged: (String, List<String>) -> Unit = { _, _ -> }) {
     val context = LocalContext.current
     val store = remember { SecureStore(context) }
     val client = remember { AiClient() }
@@ -166,6 +166,13 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     }
     val selected = threads.firstOrNull { it.id == selectedId } ?: threads.first()
     val selectedModel = selected.model
+
+    LaunchedEffect(selectedModel, modelOptions) { onTopModelOptionsChanged(selectedModel, modelOptions) }
+    LaunchedEffect(topSelectedModel, selectedId) {
+        if (topSelectedModel.isNotBlank() && topSelectedModel != selected.model && topSelectedModel in modelOptions) {
+            threads = threads.map { if (it.id == selectedId) it.copy(model = topSelectedModel) else it }
+        }
+    }
 
     fun updateSelectedModel(value: String) {
         threads = threads.map { if (it.id == selectedId) it.copy(model = value) else it }
@@ -284,32 +291,6 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                     Text("☰", color = androidx.compose.ui.graphics.Color(0xFF9B762F), style = MaterialTheme.typography.headlineSmall)
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    ExposedDropdownMenuBox(
-                        expanded = modelMenuExpanded,
-                        onExpandedChange = { modelMenuExpanded = !modelMenuExpanded }
-                    ) {
-                        OutlinedTextField(
-                            value = selectedModel.ifBlank { if (isArabic) "اختاري النموذج" else "Choose a model" },
-                            onValueChange = {},
-                            readOnly = true,
-                            enabled = modelOptions.isNotEmpty(),
-                            label = { Text(if (isArabic) "النموذج الحالي" else "Current model") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelMenuExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            singleLine = true
-                        )
-                        ExposedDropdownMenu(expanded = modelMenuExpanded, onDismissRequest = { modelMenuExpanded = false }) {
-                            modelOptions.forEach { option ->
-                                DropdownMenuItem(text = { Text(option) }, onClick = {
-                                    updateSelectedModel(option)
-                                    modelMenuExpanded = false
-                                })
-                            }
-                        }
-                    }
-                    Text(selected.title, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
                 TextButton(onClick = {
                     if (baseUrl.isBlank()) status = if (isArabic) "أدخلي رابط المزود في إعدادات AI." else "Enter provider URL in AI settings."

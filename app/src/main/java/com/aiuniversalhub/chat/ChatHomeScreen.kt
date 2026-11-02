@@ -1,6 +1,9 @@
 package com.aiuniversalhub.chat
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.widget.Toast
 import android.net.Uri
 import android.speech.RecognizerIntent
 import android.util.Base64
@@ -305,7 +308,18 @@ fun ChatHomeScreen(isArabic: Boolean) {
                             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                         ) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(if (msg.role == "user") (if (isArabic) "أنتِ" else "You") else "AI", style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color(0xFF98722F))
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (msg.role == "user") (if (isArabic) "أنتِ" else "You") else "AI",
+                                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+                                        color = androidx.compose.ui.graphics.Color(0xFF98722F))
+                                    TextButton(onClick = {
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("AI Universal Hub", msg.content))
+                                        Toast.makeText(context, if (isArabic) "تم نسخ النص" else "Text copied", Toast.LENGTH_SHORT).show()
+                                    }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                                        Text(if (isArabic) "نسخ" else "Copy", color = androidx.compose.ui.graphics.Color(0xFF98722F))
+                                    }
+                                }
                                 Text(msg.content, style = MaterialTheme.typography.bodyLarge, color = androidx.compose.ui.graphics.Color(0xFF211A1E))
                             }
                         }

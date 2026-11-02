@@ -116,6 +116,9 @@ fun HubApp() {
     var showAppSettings by remember { mutableStateOf(false) }
     var showHubMenu by remember { mutableStateOf(false) }
     var requestChatAiSettings by remember { mutableStateOf(false) }
+    var topSelectedModel by remember { mutableStateOf("") }
+    var topModelOptions by remember { mutableStateOf(emptyList<String>()) }
+    var topModelMenuExpanded by remember { mutableStateOf(false) }
 
     MaterialTheme(colorScheme = hubColors) {
         Scaffold(
@@ -127,7 +130,34 @@ fun HubApp() {
                         titleContentColor = hubColors.secondary,
                         actionIconContentColor = hubColors.secondary
                     ),
-                    title = { Text("AI Universal Hub", color = hubColors.secondary) },
+                    title = {
+                        Box {
+                            TextButton(
+                                onClick = { topModelMenuExpanded = true },
+                                enabled = topModelOptions.isNotEmpty()
+                            ) {
+                                Text(
+                                    topSelectedModel.ifBlank { if (isArabic) "اختيار النموذج" else "Choose model" },
+                                    color = hubColors.secondary,
+                                    maxLines = 1
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = topModelMenuExpanded,
+                                onDismissRequest = { topModelMenuExpanded = false }
+                            ) {
+                                topModelOptions.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model, maxLines = 1) },
+                                        onClick = {
+                                            topSelectedModel = model
+                                            topModelMenuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    },
                     actions = {
                         Box {
                             IconButton(onClick = { showHubMenu = true }) {
@@ -173,7 +203,7 @@ fun HubApp() {
                     onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463D2D)
                 )) {
                     Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxSize().padding(padding)) {
-                        ChatHomeScreen(isArabic = isArabic, openAiSettings = requestChatAiSettings, onAiSettingsConsumed = { requestChatAiSettings = false })
+                        ChatHomeScreen(isArabic = isArabic, openAiSettings = requestChatAiSettings, onAiSettingsConsumed = { requestChatAiSettings = false }, topSelectedModel = topSelectedModel, onTopModelSelected = { topSelectedModel = it }, onTopModelOptionsChanged = { model, options -> topSelectedModel = model; topModelOptions = options })
                     }
                 }
             } else SelectionContainer {

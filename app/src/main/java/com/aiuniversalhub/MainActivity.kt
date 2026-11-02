@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import com.aiuniversalhub.background.BackgroundTaskService
 import com.aiuniversalhub.registry.ToolLibraryScreen
+import com.aiuniversalhub.runtime.RuntimeCenterScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*

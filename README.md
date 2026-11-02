@@ -19,3 +19,19 @@ The workflow builds a debug APK and uploads it as an artifact. A signed release 
 
 ## Current scope
 This is a working foundation, not a finished AI platform. Free quota and reset dates are only reliable when the provider exposes them through an API; otherwise the user can set a manual reset date.
+
+
+## Background AI task execution (required product capability)
+
+User-initiated long-running AI tasks must continue when the user leaves the app or turns the screen off, subject to Android OS limits and device power/network conditions.
+
+Planned architecture:
+- Use an Android foreground service for actively running, user-visible long tasks, with a persistent notification and clear Stop/Pause controls. Declare the appropriate foreground-service type and permissions for the target Android version; do not start restricted service types or bypass Android background-start rules.
+- Use WorkManager for deferrable, persistent work such as retries, queued steps, cleanup, and resumable follow-up jobs.
+- Persist task state, project files, step checkpoints, logs, timestamps, and cancellation state locally so work can recover after process death or device restart where Android permits.
+- Provide a task center with queued/running/paused/needs-attention/completed/failed states, progress, current step, elapsed time, and controls to pause, resume, cancel, or open the result.
+- Apply network constraints and backoff; handle connectivity loss, provider rate limits, expired API keys, low storage, and battery restrictions without losing completed work.
+- Keep user consent explicit for repository writes, installs, deployments, and other consequential actions. Background execution must not silently perform newly discovered privileged actions.
+- Explain that Android may stop or delay work under force-stop, severe battery restrictions, reboot, or OEM policies; the app must report interruptions and resume safely when allowed rather than promise unlimited execution.
+
+This capability is a core requirement and must be tested with screen-off, app-switched, network-loss, process-recreation, and task-cancellation scenarios before release.

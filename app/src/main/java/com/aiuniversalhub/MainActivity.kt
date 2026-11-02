@@ -9,7 +9,6 @@ import androidx.core.content.ContextCompat
 import com.aiuniversalhub.background.BackgroundTaskService
 import com.aiuniversalhub.chat.ChatHomeScreen
 import com.aiuniversalhub.registry.ToolLibraryScreen
-import com.aiuniversalhub.runtime.RuntimeCenterScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -108,7 +107,7 @@ fun HubApp() {
                 )
             },
             bottomBar = {
-                if (selectedTab != 0) NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
+                NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
                     NavigationBarItem(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
@@ -195,7 +194,19 @@ fun HubApp() {
                     if (message.isNotBlank()) item { Text(message, color = MaterialTheme.colorScheme.secondary) }
                 } else {
                     item { ToolLibraryScreen(isArabic = isArabic) }
-                    item { RuntimeCenterScreen(isArabic = isArabic) }
+                    item {
+                        Card {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(if (isArabic) "تحديث بيئات التشغيل عبر Termux" else "Runtime updates through Termux", style = MaterialTheme.typography.titleMedium)
+                                Text(if (isArabic) "إدارة وتحديث Python وNode وGit وباقي الحزم تتم من داخل Termux فقط. لن تظهر قائمة تحديثات منفصلة داخل Hub." else "Manage and update Python, Node, Git and other packages in Termux only. Hub does not provide a separate package update list.")
+                                OutlinedButton(onClick = {
+                                    val launch = context.packageManager.getLaunchIntentForPackage("com.termux")
+                                    if (launch != null) context.startActivity(launch)
+                                    else message = if (isArabic) "Termux غير مثبت." else "Termux is not installed."
+                                }) { Text(if (isArabic) "فتح Termux" else "Open Termux") }
+                            }
+                        }
+                    }
                 }
                 }
             }

@@ -357,9 +357,11 @@ fun HubApp() {
                             "mcp" -> {
                                 var endpoint by remember { mutableStateOf(secureStore.getProviderUrl("mcp-server")) }
                                 var token by remember { mutableStateOf(secureStore.getApiKey("mcp-server").orEmpty()) }
-                                var mcpTools by remember { mutableStateOf(emptyList<String>()) }
+                                var mcpTools by remember { mutableStateOf(emptyList<org.json.JSONObject>()) }
                                 var mcpStatus by remember { mutableStateOf("") }
                                 var mcpBusy by remember { mutableStateOf(false) }
+                                var pendingMcpTool by remember { mutableStateOf<org.json.JSONObject?>(null) }
+                                var mcpArguments by remember { mutableStateOf("{}") }
                                 val mcpScope = rememberCoroutineScope()
                                 OutlinedTextField(endpoint, { endpoint = it }, label = { Text(if (isArabic) "عنوان خادم MCP عبر HTTP(S)" else "MCP HTTP(S) endpoint") }, singleLine = true)
                                 OutlinedTextField(token, { token = it }, label = { Text(if (isArabic) "رمز الدخول (اختياري)" else "Bearer token (optional)") }, singleLine = true)
@@ -374,7 +376,7 @@ fun HubApp() {
                                                 McpHttpClient(endpoint.trim(), token.trim()).connectAndListTools()
                                             }
                                             mcpTools = (0 until found.length()).mapNotNull { i ->
-                                                found.optJSONObject(i)?.optString("name")?.takeIf { it.isNotBlank() }
+                                                found.optJSONObject(i)?.let { org.json.JSONObject(it.toString()) }
                                             }
                                             mcpStatus = if (isArabic) "تم الاتصال. الأدوات المكتشفة: ${mcpTools.size}" else "Connected. Discovered tools: ${mcpTools.size}"
                                         } catch (e: Exception) {
@@ -383,8 +385,55 @@ fun HubApp() {
                                     }
                                 }) { Text(if (mcpBusy) (if (isArabic) "جارٍ الاتصال…" else "Connecting…") else (if (isArabic) "اتصال واكتشاف الأدوات" else "Connect and discover tools")) }
                                 if (mcpStatus.isNotBlank()) Text(mcpStatus, color = MaterialTheme.colorScheme.secondary)
-                                mcpTools.forEach { name -> Text("• $name", style = MaterialTheme.typography.bodySmall) }
-                                Text(if (isArabic) "اكتشاف الأدوات لا ينفذها. تشغيل أي أداة يحتاج موافقة صريحة منفصلة." else "Discovery does not execute tools. Every tool call requires separate explicit approval.", style = MaterialTheme.typography.bodySmall)
+                                mcpTools.forEach { tool ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(tool.optString("name"), style = MaterialTheme.typography.titleSmall)
+                                        Text(tool.optString("description"), style = MaterialTheme.typography.bodySmall)
+                                        OutlinedButton(enabled = !mcpBusy, onClick = {
+                                            pendingMcpTool = tool
+                                            mcpArguments = "{}"
+                                        }) { Text(if (isArabic) "مراجعة وتشغيل الأداة" else "Review & run tool") }
+                                    }
+                                }
+                                if (pendingMcpTool != null) {
+                                    AlertDialog(
+                                        onDismissRequest = { pendingMcpTool = null },
+                                        title = { Text(if (isArabic) "موافقة على استدعاء MCP" else "Approve MCP tool call") },
+                                        text = {
+                                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(pendingMcpTool!!.optString("name"))
+                                                Text(pendingMcpTool!!.optString("description"))
+                                                Text(if (isArabic) "وسائط JSON (راجعيها قبل التنفيذ)" else "JSON arguments (review before execution)")
+                                                OutlinedTextField(mcpArguments, { mcpArguments = it }, minLines = 3)
+                                            }
+                                        },
+                                        confirmButton = {
+                                            TextButton(enabled = !mcpBusy, onClick = {
+                                                val selected = pendingMcpTool ?: return@TextButton
+                                                val args = try { org.json.JSONObject(mcpArguments) } catch (_: Exception) {
+                                                    mcpStatus = if (isArabic) "صيغة JSON غير صحيحة" else "Invalid JSON arguments"
+                                                    return@TextButton
+                                                }
+                                                pendingMcpTool = null
+                                                mcpBusy = true
+                                                mcpScope.launch {
+                                                    try {
+                                                        val result = withContext(Dispatchers.IO) {
+                                                            McpHttpClient(endpoint.trim(), token.trim()).callTool(selected.optString("name"), args, true)
+                                                        }
+                                                        mcpStatus = result.toString()
+                                                    } catch (e: Exception) {
+                                                        mcpStatus = e.message ?: "MCP tool call failed"
+                                                    } finally { mcpBusy = false }
+                                                }
+                                            }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & execute") }
+                                        },
+                                        dismissButton = {
+                                            TextButton(onClick = { pendingMcpTool = null }) { Text(if (isArabic) "إلغاء" else "Cancel") }
+                                        }
+                                    )
+                                }
+                                Text(if (isArabic) "لن يتم تشغيل أي أداة إلا بعد مراجعة الوسائط والموافقة الصريحة." else "No tool runs until its arguments are reviewed and explicitly approved.", style = MaterialTheme.typography.bodySmall)
                             }
                             "litellm" -> Text(if (isArabic)
                                 "أدخلي عنوان خادم LiteLLM ومفتاحه في إعدادات مزود الذكاء الاصطناعي داخل شاشة المحادثة. مثال العنوان: http://HOST:4000/v1. يجب أن يكون الخادم شغالًا ويمكن للهاتف الوصول إليه."

@@ -23,7 +23,9 @@ fun ToolLibraryScreen(isArabic: Boolean) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(if (isArabic) "مكتبتي: النماذج والأدوات" else "My Models & Tools", style = MaterialTheme.typography.headlineSmall)
         Text(if (isArabic) "احفظ بطاقة كل أداة وإعداداتها ورابط تشغيلها هنا. التسجيل لا يعني تثبيت البرنامج تلقائيًا." else "Save each tool's profile, settings and launch link here. Registering does not install software automatically.")
-        Button(onClick = { showAdd = true }) { Text(if (isArabic) "إضافة أداة أو نموذج" else "Add tool or model") }
+        Button(onClick = { showAdd = true }) {
+            Text(if (isArabic) "＋ إضافة أداة جديدة" else "＋ Add new tool")
+        }
         if (tools.isEmpty()) {
             Text(if (isArabic) "لم تضف أدوات بعد." else "No saved tools yet.")
         }
@@ -55,7 +57,7 @@ fun ToolLibraryScreen(isArabic: Boolean) {
     if (showAdd) {
         AlertDialog(
             onDismissRequest = { showAdd = false },
-            title = { Text(if (isArabic) "إضافة إلى مكتبتي" else "Add to my library") },
+            title = { Text(if (isArabic) "إضافة أداة جديدة" else "Add a new tool") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(name, { name = it }, label = { Text(if (isArabic) "الاسم" else "Name") }, singleLine = true)

@@ -70,8 +70,8 @@ fun HubApp() {
     )
 
     val hubColors = darkColorScheme(
-        primary = androidx.compose.ui.graphics.Color(0xFFFF6FAE),
-        onPrimary = androidx.compose.ui.graphics.Color(0xFF160B12),
+        primary = androidx.compose.ui.graphics.Color(0xFFD6B56D),
+        onPrimary = androidx.compose.ui.graphics.Color(0xFF100D07),
         secondary = androidx.compose.ui.graphics.Color(0xFFD6B56D),
         onSecondary = androidx.compose.ui.graphics.Color(0xFF17120A),
         tertiary = androidx.compose.ui.graphics.Color(0xFFE7C982),
@@ -135,14 +135,14 @@ fun HubApp() {
                 if (selectedTab == 0) {
                     item {
                         MaterialTheme(colorScheme = androidx.compose.material3.lightColorScheme(
-                            primary = androidx.compose.ui.graphics.Color(0xFFB84F83),
-                            secondary = androidx.compose.ui.graphics.Color(0xFFB08A3E),
+                            primary = androidx.compose.ui.graphics.Color(0xFFB08A3E),
+                            secondary = androidx.compose.ui.graphics.Color(0xFFD6B56D),
                             background = androidx.compose.ui.graphics.Color.White,
                             surface = androidx.compose.ui.graphics.Color.White,
                             onBackground = androidx.compose.ui.graphics.Color(0xFF211A1E),
                             onSurface = androidx.compose.ui.graphics.Color(0xFF211A1E),
-                            surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF4EEF1),
-                            onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463B42)
+                            surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF4F0E7),
+                            onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463D2D)
                         )) {
                             Surface(color = androidx.compose.ui.graphics.Color.White) {
                                 ChatHomeScreen(isArabic = isArabic)
@@ -210,7 +210,7 @@ fun HubApp() {
                 title = { Text(if (isArabic) "إعدادات التطبيق" else "App settings") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (isArabic) "المظهر: أسود أنيق مع لمسات ذهبية ووردية." else "Theme: elegant black with gold and pink accents.")
+                        Text(if (isArabic) "المظهر: أسود أنيق مع لمسات ذهبية." else "Theme: elegant black with gold accents.")
                         Text(if (isArabic) "شاشة المحادثة: خلفية بيضاء." else "Chat screen: white background.")
                     }
                 },

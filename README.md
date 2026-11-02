@@ -53,3 +53,7 @@ The app now includes a curated in-app catalog for Python, pip, uv, Node.js/npm, 
 The planned package backend must target an explicitly configured compatible environment (for example, a supported Termux installation/bridge or a remote Linux host). Android app-private storage is sandboxed; the app cannot silently install arbitrary Linux packages into the Android OS. The future updater must read installed versions, check trusted upstream/package repositories, show release notes and compatibility, ask before upgrades, preserve configuration, and support rollback where the package ecosystem allows it.
 
 Docker is listed as a compatibility target, not a native Android package: a conventional Docker daemon generally requires a compatible Linux host or remote container service.
+
+## Canonical product and design specification
+
+The complete approved requirements, including the golden-gear identity, black-and-gold app shell, white chat workspace, Arabic/English support, providers, routing, tools, MCP, GitHub agent, runtime management, Chrome workflows, background continuity, security, and acceptance tests are maintained in [`PRODUCT_SPECIFICATION.md`](PRODUCT_SPECIFICATION.md). This specification is the source of truth for implementation and must not be reduced to the currently implemented feature set.

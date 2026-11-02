@@ -42,10 +42,32 @@ private data class ChatThread(
     val model: String = ""
 )
 
+private fun encryptedChatPreferences(context: android.content.Context): android.content.SharedPreferences {
+    val masterKey = androidx.security.crypto.MasterKey.Builder(context)
+        .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+        .build()
+    return androidx.security.crypto.EncryptedSharedPreferences.create(
+        context,
+        "hub_chats_secure",
+        masterKey,
+        androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+}
+
 private fun loadChatThreads(context: android.content.Context): List<ChatThread> {
     return try {
-        val raw = context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE)
-            .getString("threads", null) ?: return emptyList()
+        val secure = encryptedChatPreferences(context)
+        var raw = secure.getString("threads", null)
+        if (raw == null) {
+            val legacy = context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE)
+            raw = legacy.getString("threads", null)
+            if (raw != null) {
+                secure.edit().putString("threads", raw).commit()
+                legacy.edit().remove("threads").commit()
+            }
+        }
+        raw ?: return emptyList()
         val array = JSONArray(raw)
         (0 until array.length()).map { index ->
             val obj = array.getJSONObject(index)
@@ -67,8 +89,7 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
         array.put(JSONObject().put("id", thread.id).put("title", thread.title)
             .put("model", thread.model).put("messages", messages))
     }
-    context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE)
-        .edit().putString("threads", array.toString()).apply()
+    encryptedChatPreferences(context).edit().putString("threads", array.toString()).apply()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

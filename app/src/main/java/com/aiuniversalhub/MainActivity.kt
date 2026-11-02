@@ -81,6 +81,11 @@ fun HubApp() {
     var termuxInstalled by remember { mutableStateOf(isPackageInstalled(context, "com.termux")) }
     var message by remember { mutableStateOf("") }
     var selectedTool by remember { mutableStateOf<ToolCard?>(null) }
+    var showAddNetwork by remember { mutableStateOf(false) }
+    var networkName by remember { mutableStateOf("") }
+    var networkEndpoint by remember { mutableStateOf("") }
+    var networkKey by remember { mutableStateOf("") }
+    var savedNetworks by remember { mutableStateOf(secureStore.listProviders()) }
 
     val tools = listOf(
         ToolCard("termux", "Termux", "Android terminal environment", "بيئة أوامر محلية على أندرويد",
@@ -246,7 +251,40 @@ fun HubApp() {
                             "استكشفي كتالوجات النماذج الرسمية وافتحي صفحة إنشاء مفتاح API لدى المزود. لا نعرض أي رصيد أو حصة على أنها متاحة إلا إذا أكدها المزود."
                             else "Browse official model catalogs and open each provider's API-key page. Quotas and credits are shown only when confirmed by the provider.")
                     }
-                    items(externalProviders.size) { index ->
+                    item {
+                        Button(onClick = {
+                            networkName = ""
+                            networkEndpoint = ""
+                            networkKey = ""
+                            showAddNetwork = true
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (isArabic) "＋ إضافة شبكة جديدة" else "＋ Add network")
+                        }
+                    }
+                    items(externalProviders.size + savedNetworks.size) { index ->
+                        if (index >= externalProviders.size) {
+                            val saved = savedNetworks[index - externalProviders.size]
+                            Card {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Text(saved.name, style = MaterialTheme.typography.titleLarge, color = hubColors.secondary)
+                                    Text((if (isArabic) "عنوان API: " else "API endpoint: ") + saved.baseUrl,
+                                        style = MaterialTheme.typography.bodySmall)
+                                    Text(if (isArabic) "شبكة مضافة ومحفوظة على هذا الجهاز" else "Custom network saved on this device",
+                                        style = MaterialTheme.typography.bodySmall)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = {
+                                            selectedTab = 0
+                                            message = if (isArabic) "افتحي ترس الإعدادات في المحادثة لاختيار الشبكة وتحميل موديلاتها." else "Open chat AI settings to select this network and load its models."
+                                        }) { Text(if (isArabic) "استخدام الشبكة" else "Use network") }
+                                        TextButton(onClick = {
+                                            secureStore.deleteProvider(saved.id)
+                                            savedNetworks = secureStore.listProviders()
+                                            message = if (isArabic) "تم حذف الشبكة المحفوظة." else "Saved network deleted."
+                                        }) { Text(if (isArabic) "حذف" else "Delete") }
+                                    }
+                                }
+                            }
+                        } else {
                         val provider = externalProviders[index]
                         Card {
                             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -263,6 +301,7 @@ fun HubApp() {
                                     }) { Text(if (isArabic) "صفحة المفتاح" else "API key") }
                                 }
                             }
+                        }
                         }
                     }
                     item {
@@ -338,6 +377,47 @@ fun HubApp() {
                 },
                 dismissButton = {
                     TextButton(onClick = { selectedTool = null }) { Text(if (isArabic) "إغلاق" else "Close") }
+                }
+            )
+        }
+        if (showAddNetwork) {
+            AlertDialog(
+                onDismissRequest = { showAddNetwork = false },
+                title = { Text(if (isArabic) "إضافة شبكة / مزوّد جديد" else "Add network / provider") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(networkName, { networkName = it }, modifier = Modifier.fillMaxWidth(),
+                            label = { Text(if (isArabic) "اسم الشبكة" else "Network name") }, singleLine = true)
+                        OutlinedTextField(networkEndpoint, { networkEndpoint = it }, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Base URL (مثال: https://host/v1)") }, singleLine = true)
+                        OutlinedTextField(networkKey, { networkKey = it }, modifier = Modifier.fillMaxWidth(),
+                            label = { Text(if (isArabic) "مفتاح API (اختياري)" else "API key (optional)") },
+                            singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                        Text(if (isArabic) "سيُحفظ الرابط والمفتاح بشكل مشفّر على الجهاز. بعد الحفظ اختاري الشبكة من إعدادات الذكاء الاصطناعي لتحميل الموديلات." else "The endpoint and key are encrypted on-device. After saving, select this network in AI settings to load its models.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val name = networkName.trim()
+                        val url = networkEndpoint.trim()
+                        val idBase = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                        val id = if (idBase.isBlank()) "network-" + java.util.UUID.randomUUID().toString().take(8) else idBase
+                        if (name.isBlank() || !(url.startsWith("https://") || url.startsWith("http://"))) {
+                            message = if (isArabic) "أدخلي اسم الشبكة ورابط API صحيحًا يبدأ بـ http:// أو https://" else "Enter a network name and a valid http(s) API URL."
+                        } else if (savedNetworks.any { it.id == id }) {
+                            message = if (isArabic) "اسم الشبكة مستخدم بالفعل." else "That network name is already in use."
+                        } else {
+                            secureStore.saveProvider(id, name, url, networkKey)
+                            savedNetworks = secureStore.listProviders()
+                            networkName = ""; networkEndpoint = ""; networkKey = ""
+                            showAddNetwork = false
+                            message = if (isArabic) "تم حفظ الشبكة. افتحي المحادثة ثم إعدادات مزوّد الذكاء الاصطناعي لاكتشاف الموديلات." else "Network saved. Open chat AI provider settings to discover its models."
+                        }
+                    }) { Text(if (isArabic) "حفظ الشبكة" else "Save network") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddNetwork = false }) { Text(if (isArabic) "إلغاء" else "Cancel") }
                 }
             )
         }

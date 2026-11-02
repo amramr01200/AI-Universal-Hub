@@ -174,20 +174,22 @@ fun HubApp() {
                     }
                 )
             },
-            bottomBar = if (selectedTab == 0) null else {
-                NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
-                    NavigationBarItem(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        label = { Text(if (isArabic) "مكتبتي" else "My Library") },
-                        icon = { Text("▣") }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 },
-                        label = { Text(if (isArabic) "الشبكات" else "Providers") },
-                        icon = { Text("◎") }
-                    )
+            bottomBar = {
+                if (selectedTab != 0) {
+                    NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
+                        NavigationBarItem(
+                            selected = selectedTab == 2,
+                            onClick = { selectedTab = 2 },
+                            label = { Text(if (isArabic) "مكتبتي" else "My Library") },
+                            icon = { Text("▣") }
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == 3,
+                            onClick = { selectedTab = 3 },
+                            label = { Text(if (isArabic) "الشبكات" else "Providers") },
+                            icon = { Text("◎") }
+                        )
+                    }
                 }
             }
         ) { padding ->

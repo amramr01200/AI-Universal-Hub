@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import org.json.JSONArray
+import org.json.JSONObject
 
 data class SavedProvider(val id: String, val name: String, val baseUrl: String)
 
@@ -87,6 +88,37 @@ class SecureStore(context: Context) {
 
     fun getProviderUrl(providerId: String, defaultValue: String = ""): String =
         prefs.getString("provider_url_$providerId", defaultValue) ?: defaultValue
+
+
+    /** Persist named MCP endpoints and bearer tokens in EncryptedSharedPreferences. */
+    fun saveMcpServer(id: String, name: String, endpoint: String, bearerToken: String = "") {
+        val safeId = id.trim()
+        require(safeId.isNotBlank()) { "MCP server id is required." }
+        require(endpoint.startsWith("https://") || endpoint.startsWith("http://")) { "MCP endpoint must use HTTP(S)." }
+        val ids = prefs.getStringSet("mcp_server_registry", emptySet())?.toMutableSet() ?: mutableSetOf()
+        ids.add(safeId)
+        prefs.edit().putStringSet("mcp_server_registry", ids)
+            .putString("mcp_server_name_$safeId", name.trim())
+            .putString("mcp_server_endpoint_$safeId", endpoint.trim())
+            .putString("mcp_server_token_$safeId", bearerToken.trim().ifBlank { null }).apply()
+    }
+
+    fun listMcpServers(): List<JSONObject> {
+        val ids = prefs.getStringSet("mcp_server_registry", emptySet()) ?: emptySet()
+        return ids.mapNotNull { id ->
+            val endpoint = prefs.getString("mcp_server_endpoint_$id", null) ?: return@mapNotNull null
+            JSONObject().put("id", id).put("name", prefs.getString("mcp_server_name_$id", id)).put("endpoint", endpoint)
+        }.sortedBy { it.optString("name").lowercase() }
+    }
+
+    fun getMcpServerToken(id: String): String = prefs.getString("mcp_server_token_$id", "") ?: ""
+
+    fun deleteMcpServer(id: String) {
+        val ids = prefs.getStringSet("mcp_server_registry", emptySet())?.toMutableSet() ?: mutableSetOf()
+        ids.remove(id)
+        prefs.edit().putStringSet("mcp_server_registry", ids).remove("mcp_server_name_$id")
+            .remove("mcp_server_endpoint_$id").remove("mcp_server_token_$id").apply()
+    }
 
     fun saveSelectedProvider(providerId: String) {
         prefs.edit().putString("selected_provider", providerId).apply()

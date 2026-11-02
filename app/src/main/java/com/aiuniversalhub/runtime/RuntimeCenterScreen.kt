@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.util.UUID
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 @Composable
 fun RuntimeCenterScreen(isArabic: Boolean) {
@@ -25,6 +27,27 @@ fun RuntimeCenterScreen(isArabic: Boolean) {
     var runningComponent by remember { mutableStateOf<String?>(null) }
     var pendingApproval by remember { mutableStateOf<RuntimeComponent?>(null) }
     val audit = remember { ApprovalAuditStore(context) }
+    var bridgeOutput by remember { mutableStateOf("") }
+    var bridgeError by remember { mutableStateOf("") }
+    var bridgeMeta by remember { mutableStateOf("") }
+    fun refreshBridgeResult() {
+        try {
+            val key = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+            val prefs = EncryptedSharedPreferences.create(context, TermuxResultReceiver.PREFS, key,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+            bridgeOutput = prefs.getString("stdout", "").orEmpty()
+            bridgeError = prefs.getString("stderr", "").orEmpty()
+            bridgeMeta = "Exit: " + prefs.getInt("exit_code", -1) + " • " + prefs.getString("label", "")
+            val internalError = prefs.getString("error_message", "").orEmpty()
+            if (internalError.isNotBlank()) bridgeError = internalError + "\n" + bridgeError
+        } catch (e: Exception) { bridgeMeta = e.message ?: "Could not read result" }
+    }
+    fun runDiagnostic(id: String) {
+        val result = TermuxBridgeAdapter.sendDiagnostic(context, id)
+        status = result.message
+        if (result.submitted) status = if (isArabic) "تم إرسال طلب الفحص؛ اضغطي تحديث النتائج بعد لحظات." else result.message
+    }
 
     LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -44,6 +67,24 @@ fun RuntimeCenterScreen(isArabic: Boolean) {
                         }) { Text(if (isArabic) "فتح Termux للإعداد" else "Open Termux setup") }
                     }
                     Text(if (isArabic) "فعّلي السماح بتشغيل الأوامر من تطبيقات خارجية وامنحي إذن RUN_COMMAND." else "Enable external-app command execution in Termux and grant RUN_COMMAND permission.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item {
+            Card {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (isArabic) "اختبار الجسر ثنائي الاتجاه" else "Two-way bridge test", style = MaterialTheme.typography.titleMedium)
+                    Text(if (isArabic) "أوامر قراءة فقط: تعرض النتائج هنا بعد رجوعها من Termux." else "Read-only diagnostics. Results appear here after Termux sends them back.", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(enabled = termuxInstalled, onClick = { runDiagnostic("pwd") }) { Text("pwd") }
+                        OutlinedButton(enabled = termuxInstalled, onClick = { runDiagnostic("date") }) { Text("date") }
+                        OutlinedButton(enabled = termuxInstalled, onClick = { runDiagnostic("uname") }) { Text("uname") }
+                        OutlinedButton(enabled = termuxInstalled, onClick = { runDiagnostic("list_home") }) { Text("ls") }
+                    }
+                    Button(onClick = { refreshBridgeResult() }) { Text(if (isArabic) "تحديث النتائج" else "Refresh results") }
+                    if (bridgeMeta.isNotBlank()) Text(bridgeMeta, style = MaterialTheme.typography.labelMedium)
+                    if (bridgeOutput.isNotBlank()) Text(bridgeOutput, style = MaterialTheme.typography.bodySmall)
+                    if (bridgeError.isNotBlank()) Text(bridgeError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

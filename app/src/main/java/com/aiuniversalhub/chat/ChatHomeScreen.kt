@@ -15,10 +15,37 @@ import com.aiuniversalhub.net.AiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import org.json.JSONObject\nimport org.json.JSONArray
 
 private data class ChatMessage(val role: String, val content: String)
 private data class ChatThread(val id: Int, val title: String, val messages: List<ChatMessage> = emptyList())
+
+private fun loadChatThreads(context: android.content.Context): List<ChatThread> {
+    return try {
+        val raw = context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE).getString("threads", null) ?: return emptyList()
+        val array = JSONArray(raw)
+        (0 until array.length()).map { index ->
+            val obj = array.getJSONObject(index)
+            val messagesJson = obj.optJSONArray("messages") ?: JSONArray()
+            val messages = (0 until messagesJson.length()).map { i ->
+                val m = messagesJson.getJSONObject(i)
+                ChatMessage(m.optString("role"), m.optString("content"))
+            }
+            ChatThread(obj.optInt("id"), obj.optString("title"), messages)
+        }
+    } catch (_: Exception) { emptyList() }
+}
+
+private fun saveChatThreads(context: android.content.Context, threads: List<ChatThread>) {
+    val array = JSONArray()
+    threads.forEach { thread ->
+        val messages = JSONArray()
+        thread.messages.forEach { messages.put(JSONObject().put("role", it.role).put("content", it.content)) }
+        array.put(JSONObject().put("id", thread.id).put("title", thread.title).put("messages", messages))
+    }
+    context.getSharedPreferences("hub_chats", android.content.Context.MODE_PRIVATE)
+        .edit().putString("threads", array.toString()).apply()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +54,9 @@ fun ChatHomeScreen(isArabic: Boolean) {
     val store = remember { SecureStore(context) }
     val client = remember { AiClient() }
     val scope = rememberCoroutineScope()
-    var threads by remember { mutableStateOf(listOf(ChatThread(1, if (isArabic) "محادثة جديدة" else "New chat"))) }
+    var threads by remember {
+        mutableStateOf(loadChatThreads(context).ifEmpty { listOf(ChatThread(1, if (isArabic) "محادثة جديدة" else "New chat")) })
+    }
     var selectedId by remember { mutableIntStateOf(1) }
     var nextId by remember { mutableIntStateOf(2) }
     var draft by remember { mutableStateOf("") }
@@ -46,6 +75,8 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var showSettings by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
+    LaunchedEffect(threads) { saveChatThreads(context, threads) }
+    LaunchedEffect(threads) { if (threads.none { it.id == selectedId }) selectedId = threads.first().id }
     val selected = threads.firstOrNull { it.id == selectedId } ?: threads.first()
     val messages = selected.messages
 

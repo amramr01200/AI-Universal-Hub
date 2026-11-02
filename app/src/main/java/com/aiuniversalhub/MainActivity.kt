@@ -119,7 +119,7 @@ fun HubApp() {
         Scaffold(
             containerColor = hubColors.background,
             topBar = {
-                if (selectedTab != 0) TopAppBar(
+                TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = androidx.compose.ui.graphics.Color(0xFF050505),
                         titleContentColor = hubColors.secondary,
@@ -138,18 +138,6 @@ fun HubApp() {
             },
             bottomBar = {
                 NavigationBar(containerColor = androidx.compose.ui.graphics.Color(0xFF050505), contentColor = hubColors.primary) {
-                    NavigationBarItem(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        label = { Text(if (isArabic) "الرئيسية" else "Home") },
-                        icon = { Text("⌂") }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        label = { Text(if (isArabic) "الأدوات" else "Tools") },
-                        icon = { Text("⚙") }
-                    )
                     NavigationBarItem(
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
@@ -432,6 +420,14 @@ fun HubApp() {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(if (isArabic) "المظهر: أسود أنيق مع لمسات ذهبية." else "Theme: elegant black with gold accents.")
                         Text(if (isArabic) "شاشة المحادثة: خلفية بيضاء." else "Chat screen: white background.")
+                        OutlinedButton(
+                            onClick = { selectedTab = 1; showAppSettings = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (isArabic) "مركز الأدوات" else "Tools Center") }
+                        OutlinedButton(
+                            onClick = { selectedTab = 0; showAppSettings = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (isArabic) "العودة للمحادثة" else "Back to chat") }
                     }
                 },
                 confirmButton = {

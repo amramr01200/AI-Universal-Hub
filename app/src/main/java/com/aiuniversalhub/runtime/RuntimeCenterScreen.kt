@@ -2,6 +2,7 @@ package com.aiuniversalhub.runtime
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import com.aiuniversalhub.security.ApprovalAuditStore
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -13,6 +14,8 @@ fun RuntimeCenterScreen(isArabic: Boolean) {
     var termuxInstalled by remember { mutableStateOf(TermuxBridgeAdapter.isInstalled(context)) }
     var status by remember { mutableStateOf("") }
     var runningComponent by remember { mutableStateOf<String?>(null) }
+    var pendingApproval by remember { mutableStateOf<RuntimeComponent?>(null) }
+    val audit = remember { ApprovalAuditStore(context) }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(if (isArabic) "بيئة التشغيل والحزم" else "Runtime & Packages", style = MaterialTheme.typography.headlineSmall)
@@ -54,20 +57,44 @@ fun RuntimeCenterScreen(isArabic: Boolean) {
                     Text(component.installCommand, modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall)
                     Button(
                         enabled = termuxInstalled && runningComponent == null,
-                        onClick = {
-                            runningComponent = component.id
-                            val result = TermuxBridgeAdapter.sendApprovedCommand(context, component.id)
-                            status = if (isArabic) {
-                                (if (result.submitted) "تم إرسال الأمر: " else "تعذر الإرسال: ") + result.message
-                            } else result.message
-                            runningComponent = null
-                        }
+                        onClick = { pendingApproval = component }
                     ) {
-                        Text(if (component.id == "pip") (if (isArabic) "فحص pip" else "Check pip") else if (isArabic) "تنفيذ في Termux" else "Run in Termux")
+                        Text(if (component.id == "pip") (if (isArabic) "فحص pip" else "Check pip") else if (isArabic) "طلب موافقة للتنفيذ" else "Review & approve")
                     }
                 }
             }
         }
         Text(if (isArabic) "الإرسال لا يعني اكتمال التثبيت؛ Termux ينفذ الأمر في الخلفية، وتظهر نتيجة التنفيذ في إشعاراته/مخرجاته. لا يدعم Android تثبيت حزم Termux مباشرة دون بيئته." else "Submission is not proof of installation. Termux runs the command in the background and reports output through its notifications/output. Android cannot install Termux packages without its runtime.")
+    }
+    if (pendingApproval != null) {
+        val selected = pendingApproval!!
+        AlertDialog(
+            onDismissRequest = { pendingApproval = null },
+            title = { Text(if (isArabic) "تأكيد تنفيذ الأمر" else "Confirm command execution") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (isArabic) "سيتم إرسال الأمر التالي إلى Termux. راجعيه قبل الموافقة:" else "The following command will be sent to Termux. Review it before approval:")
+                    Text(selected.installCommand, style = MaterialTheme.typography.bodyMedium)
+                    Text(if (isArabic) "المصدر: كتالوج الحزم المعتمد داخل التطبيق. التنفيذ يتم داخل Termux وليس داخل التطبيق." else "Source: the app approved package catalog. Execution occurs inside Termux, not inside the Hub.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingApproval = null
+                    runningComponent = selected.id
+                    val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id)
+                    status = if (isArabic) (if (result.submitted) "تم إرسال الأمر: " else "تعذر الإرسال: ") + result.message else result.message
+                    audit.record("termux_command", selected.id + ": " + selected.installCommand,
+                        if (result.submitted) "submitted" else "failed")
+                    runningComponent = null
+                }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    audit.record("termux_command", selected.id + ": " + selected.installCommand, "rejected")
+                    pendingApproval = null
+                }) { Text(if (isArabic) "رفض" else "Deny") }
+            }
+        )
     }
 }

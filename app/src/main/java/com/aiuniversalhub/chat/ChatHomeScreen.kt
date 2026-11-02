@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -19,13 +20,14 @@ import org.json.JSONObject
 private data class ChatMessage(val role: String, val content: String)
 private data class ChatThread(val id: Int, val title: String, val messages: List<ChatMessage> = emptyList())
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatHomeScreen(isArabic: Boolean) {
     val context = LocalContext.current
     val store = remember { SecureStore(context) }
     val client = remember { AiClient() }
     val scope = rememberCoroutineScope()
-    var threads by remember { mutableStateOf(listOf(ChatThread(1, if (isArabic) "محادثة جديدة" else "New chat")) }
+    var threads by remember { mutableStateOf(listOf(ChatThread(1, if (isArabic) "محادثة جديدة" else "New chat"))) }
     var selectedId by remember { mutableIntStateOf(1) }
     var nextId by remember { mutableIntStateOf(2) }
     var draft by remember { mutableStateOf("") }

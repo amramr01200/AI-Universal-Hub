@@ -81,8 +81,14 @@ fun ChatHomeScreen(isArabic: Boolean) {
     var nextId by remember { mutableIntStateOf((threads.maxOfOrNull { it.id } ?: 0) + 1) }
     var draft by remember { mutableStateOf("") }
     val providerOptions = listOf(
+        Triple("OpenAI", "https://api.openai.com/v1", true),
         Triple("OpenAI-compatible", "https://api.openai.com/v1", true),
         Triple("OpenRouter", "https://openrouter.ai/api/v1", true),
+        Triple("Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", true),
+        Triple("Groq", "https://api.groq.com/openai/v1", true),
+        Triple("DeepSeek", "https://api.deepseek.com/v1", true),
+        Triple("Mistral AI", "https://api.mistral.ai/v1", true),
+        Triple("Together AI", "https://api.together.xyz/v1", true),
         Triple("FreeModel", "https://freemodel.in/v1", true),
         Triple("LiteLLM", "http://localhost:4000/v1", true),
         Triple("Ollama", "http://localhost:11434/v1", false),
@@ -451,7 +457,31 @@ fun ChatHomeScreen(isArabic: Boolean) {
                                     baseUrl = store.getProviderUrl(id, option.second)
                                     apiKey = store.getApiKey(id) ?: ""
                                     modelOptions = store.getModels(id)
+                                    store.saveSelectedProvider(id)
                                     providerExpanded = false
+                                    if (option.second.isNotBlank()) {
+                                        busy = true
+                                        scope.launch {
+                                            try {
+                                                val raw = withContext(Dispatchers.IO) {
+                                                    client.listModels(option.second, store.getApiKey(id).orEmpty())
+                                                }
+                                                val discovered = client.parseModelIds(raw)
+                                                store.saveModels(id, discovered)
+                                                if (providerName == option.first) {
+                                                    modelOptions = discovered
+                                                    if (discovered.isNotEmpty() && selectedModel !in discovered) {
+                                                        updateSelectedModel(discovered.first())
+                                                    }
+                                                }
+                                                status = if (discovered.isEmpty())
+                                                    (if (isArabic) "لم يرجع المزود نماذج متاحة." else "Provider returned no models.")
+                                                else (if (isArabic) "تم اكتشاف ${discovered.size} نموذجًا من ${option.first}." else "Discovered ${discovered.size} models from ${option.first}.")
+                                            } catch (e: Exception) {
+                                                status = e.message ?: if (isArabic) "تعذر تحديث كتالوج المزود." else "Could not refresh provider catalog."
+                                            } finally { busy = false }
+                                        }
+                                    }
                                 })
                             }
                         }

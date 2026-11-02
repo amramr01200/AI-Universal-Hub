@@ -30,6 +30,25 @@ private data class ToolCard(
     val installUrl: String? = null
 )
 
+
+private data class ExternalProvider(
+    val name: String,
+    val descriptionAr: String,
+    val endpoint: String,
+    val catalogUrl: String,
+    val keyUrl: String
+)
+
+private val externalProviders = listOf(
+    ExternalProvider("OpenRouter", "بوابة واحدة لموديلات من شركات متعددة، وبها موديلات مجانية محدودة حسب التوفر.", "https://openrouter.ai/api/v1", "https://openrouter.ai/models", "https://openrouter.ai/settings/keys"),
+    ExternalProvider("OpenAI", "واجهة OpenAI الرسمية؛ استخدام API منفصل عن اشتراك ChatGPT.", "https://api.openai.com/v1", "https://platform.openai.com/docs/models", "https://platform.openai.com/api-keys"),
+    ExternalProvider("Google Gemini", "نماذج Gemini عبر Google AI Studio؛ راجعي شروط الحصة المجانية.", "https://generativelanguage.googleapis.com/v1beta/openai", "https://ai.google.dev/gemini-api/docs/models", "https://aistudio.google.com/app/apikey"),
+    ExternalProvider("Groq", "استضافة نماذج سريعة؛ حدود الاستخدام والخطط تتغير حسب الحساب.", "https://api.groq.com/openai/v1", "https://console.groq.com/docs/models", "https://console.groq.com/keys"),
+    ExternalProvider("DeepSeek", "نماذج DeepSeek عبر API؛ راجعي الأسعار والرصيد قبل الاستخدام.", "https://api.deepseek.com/v1", "https://api-docs.deepseek.com/", "https://platform.deepseek.com/api_keys"),
+    ExternalProvider("Mistral AI", "نماذج Mistral وخيارات API للمطورين.", "https://api.mistral.ai/v1", "https://docs.mistral.ai/getting-started/models/", "https://console.mistral.ai/api-keys/"),
+    ExternalProvider("Together AI", "كتالوج نماذج مستضافة من عدة عائلات؛ الأسعار حسب النموذج.", "https://api.together.xyz/v1", "https://www.together.ai/models", "https://api.together.ai/settings/api-keys")
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,6 +145,12 @@ fun HubApp() {
                         label = { Text(if (isArabic) "مكتبتي" else "My Library") },
                         icon = { Text("▣") }
                     )
+                    NavigationBarItem(
+                        selected = selectedTab == 3,
+                        onClick = { selectedTab = 3 },
+                        label = { Text(if (isArabic) "الشبكات" else "Providers") },
+                        icon = { Text("◎") }
+                    )
                 }
             }
         ) { padding ->
@@ -192,7 +217,7 @@ fun HubApp() {
                         }) { Text(if (isArabic) "تحديث حالة الأدوات" else "Refresh tool status") }
                     }
                     if (message.isNotBlank()) item { Text(message, color = MaterialTheme.colorScheme.secondary) }
-                } else {
+                } else if (selectedTab == 2) {
                     item { ToolLibraryScreen(isArabic = isArabic) }
                     item {
                         Card {
@@ -206,6 +231,38 @@ fun HubApp() {
                                 }) { Text(if (isArabic) "فتح Termux" else "Open Termux") }
                             }
                         }
+                    }
+                } else {
+                    item {
+                        Text(if (isArabic) "شبكات ومزوّدو الخدمات الخارجية" else "External AI provider networks",
+                            style = MaterialTheme.typography.headlineSmall, color = hubColors.secondary)
+                        Text(if (isArabic)
+                            "استكشفي كتالوجات النماذج الرسمية وافتحي صفحة إنشاء مفتاح API لدى المزود. لا نعرض أي رصيد أو حصة على أنها متاحة إلا إذا أكدها المزود."
+                            else "Browse official model catalogs and open each provider's API-key page. Quotas and credits are shown only when confirmed by the provider.")
+                    }
+                    items(externalProviders.size) { index ->
+                        val provider = externalProviders[index]
+                        Card {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Text(provider.name, style = MaterialTheme.typography.titleLarge, color = hubColors.secondary)
+                                Text(if (isArabic) provider.descriptionAr else provider.name)
+                                Text((if (isArabic) "عنوان API: " else "API endpoint: ") + provider.endpoint,
+                                    style = MaterialTheme.typography.bodySmall)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(onClick = {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.catalogUrl)))
+                                    }) { Text(if (isArabic) "كتالوج النماذج" else "Model catalog") }
+                                    Button(onClick = {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(provider.keyUrl)))
+                                    }) { Text(if (isArabic) "صفحة المفتاح" else "API key") }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Text(if (isArabic)
+                            "مهم: المفتاح يُنشأ داخل حسابك لدى المزود ثم يُضاف من إعدادات مزود الذكاء الاصطناعي في المحادثة. لا تشاركيه مع أي شخص. بعض الموديلات مجانية بحدود، وبعضها يحتاج رصيدًا مدفوعًا."
+                            else "Important: create the key in your provider account, then add it in AI provider settings in chat. Never share it. Some models have limited free tiers; others require paid credits.")
                     }
                 }
                 }

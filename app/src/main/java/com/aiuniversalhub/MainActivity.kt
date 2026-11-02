@@ -9,6 +9,10 @@ import androidx.core.content.ContextCompat
 import com.aiuniversalhub.background.BackgroundTaskService
 import com.aiuniversalhub.chat.ChatHomeScreen
 import com.aiuniversalhub.registry.ToolLibraryScreen
+import com.aiuniversalhub.integrations.McpHttpClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -279,9 +283,37 @@ fun HubApp() {
                             "ollama" -> Text(if (isArabic)
                                 "للتوصيل: شغّلي Ollama على جهاز أو خادم يمكن للهاتف الوصول إليه، ثم استخدمي عنوان OpenAI-compatible مثل http://HOST:11434/v1 من إعدادات مزود الذكاء الاصطناعي. localhost على الهاتف لن يشير تلقائيًا إلى جهاز الكمبيوتر."
                                 else "Connect an Ollama host reachable from this phone, then use its OpenAI-compatible endpoint (for example http://HOST:11434/v1) in AI provider settings. Phone localhost does not point to your computer.")
-                            "mcp" -> Text(if (isArabic)
-                                "عميل MCP موجود بشكل أولي داخل المشروع، لكن شاشة إضافة الخادم وإدارة الجلسة واستعراض الأدوات لم تكتمل بعد؛ لذلك لا يوجد اتصال فعلي من هذه الشاشة الآن."
-                                else "The project has an early MCP client, but server setup, session management, and tool browsing UI are not complete yet; no live connection is available here.")
+                            "mcp" -> {
+                                var endpoint by remember { mutableStateOf(context.getSharedPreferences("hub_mcp", 0).getString("endpoint", "") ?: "") }
+                                var token by remember { mutableStateOf(context.getSharedPreferences("hub_mcp", 0).getString("token", "") ?: "") }
+                                var mcpTools by remember { mutableStateOf(emptyList<String>()) }
+                                var mcpStatus by remember { mutableStateOf("") }
+                                var mcpBusy by remember { mutableStateOf(false) }
+                                val mcpScope = rememberCoroutineScope()
+                                OutlinedTextField(endpoint, { endpoint = it }, label = { Text(if (isArabic) "عنوان خادم MCP عبر HTTP(S)" else "MCP HTTP(S) endpoint") }, singleLine = true)
+                                OutlinedTextField(token, { token = it }, label = { Text(if (isArabic) "رمز الدخول (اختياري)" else "Bearer token (optional)") }, singleLine = true)
+                                Button(enabled = !mcpBusy && endpoint.isNotBlank(), onClick = {
+                                    mcpBusy = true
+                                    mcpStatus = ""
+                                    context.getSharedPreferences("hub_mcp", 0).edit().putString("endpoint", endpoint.trim()).putString("token", token.trim()).apply()
+                                    mcpScope.launch {
+                                        try {
+                                            val found = withContext(Dispatchers.IO) {
+                                                McpHttpClient(endpoint.trim(), token.trim()).connectAndListTools()
+                                            }
+                                            mcpTools = (0 until found.length()).mapNotNull { i ->
+                                                found.optJSONObject(i)?.optString("name")?.takeIf { it.isNotBlank() }
+                                            }
+                                            mcpStatus = if (isArabic) "تم الاتصال. الأدوات المكتشفة: ${mcpTools.size}" else "Connected. Discovered tools: ${mcpTools.size}"
+                                        } catch (e: Exception) {
+                                            mcpStatus = e.message ?: "MCP connection failed"
+                                        } finally { mcpBusy = false }
+                                    }
+                                }) { Text(if (mcpBusy) (if (isArabic) "جارٍ الاتصال…" else "Connecting…") else (if (isArabic) "اتصال واكتشاف الأدوات" else "Connect and discover tools")) }
+                                if (mcpStatus.isNotBlank()) Text(mcpStatus, color = MaterialTheme.colorScheme.secondary)
+                                mcpTools.forEach { name -> Text("• $name", style = MaterialTheme.typography.bodySmall) }
+                                Text(if (isArabic) "اكتشاف الأدوات لا ينفذها. تشغيل أي أداة يحتاج موافقة صريحة منفصلة." else "Discovery does not execute tools. Every tool call requires separate explicit approval.", style = MaterialTheme.typography.bodySmall)
+                            }
                             "litellm" -> Text(if (isArabic)
                                 "أدخلي عنوان خادم LiteLLM ومفتاحه في إعدادات مزود الذكاء الاصطناعي داخل شاشة المحادثة. مثال العنوان: http://HOST:4000/v1. يجب أن يكون الخادم شغالًا ويمكن للهاتف الوصول إليه."
                                 else "Enter your LiteLLM server URL and key in AI provider settings on the chat screen. Example: http://HOST:4000/v1. The server must be running and reachable from this phone.")

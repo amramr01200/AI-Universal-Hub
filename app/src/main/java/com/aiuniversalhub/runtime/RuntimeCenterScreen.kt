@@ -14,7 +14,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 @Composable
-fun RuntimeCenterScreen(isArabic: Boolean) {
+fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     val context = LocalContext.current
     val store = remember { TermuxAgentStore(context) }
     var profiles by remember { mutableStateOf(store.list()) }
@@ -38,13 +38,13 @@ fun RuntimeCenterScreen(isArabic: Boolean) {
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
             bridgeOutput = prefs.getString("stdout", "").orEmpty()
             bridgeError = prefs.getString("stderr", "").orEmpty()
-            bridgeMeta = "Exit: " + prefs.getInt("exit_code", -1) + " • " + prefs.getString("label", "")
+            bridgeMeta = "Chat #" + prefs.getInt("conversation_id", -1) + " • Exit: " + prefs.getInt("exit_code", -1) + " • " + prefs.getString("label", "")
             val internalError = prefs.getString("error_message", "").orEmpty()
             if (internalError.isNotBlank()) bridgeError = internalError + "\n" + bridgeError
         } catch (e: Exception) { bridgeMeta = e.message ?: "Could not read result" }
     }
     fun runDiagnostic(id: String) {
-        val result = TermuxBridgeAdapter.sendDiagnostic(context, id)
+        val result = TermuxBridgeAdapter.sendDiagnostic(context, id, activeConversationId)
         status = result.message
         if (result.submitted) status = if (isArabic) "تم إرسال طلب الفحص؛ اضغطي تحديث النتائج بعد لحظات." else result.message
     }
@@ -74,7 +74,7 @@ fun RuntimeCenterScreen(isArabic: Boolean) {
             Card {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (isArabic) "اختبار الجسر ثنائي الاتجاه" else "Two-way bridge test", style = MaterialTheme.typography.titleMedium)
-                    Text(if (isArabic) "أوامر قراءة فقط: تعرض النتائج هنا بعد رجوعها من Termux." else "Read-only diagnostics. Results appear here after Termux sends them back.", style = MaterialTheme.typography.bodySmall)
+                    Text(if (isArabic) "المحادثة النشطة: #$activeConversationId. نتائج الفحص تُضاف تلقائيًا لنفس المحادثة عند الرجوع إليها." else "Active conversation: #$activeConversationId. Diagnostic results are automatically imported into that chat when it resumes.", style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(enabled = termuxInstalled, onClick = { runDiagnostic("pwd") }) { Text("pwd") }
                         OutlinedButton(enabled = termuxInstalled, onClick = { runDiagnostic("date") }) { Text("date") }
@@ -153,7 +153,7 @@ fun RuntimeCenterScreen(isArabic: Boolean) {
             confirmButton = { TextButton(onClick = {
                 pendingApproval = null
                 runningComponent = selected.id
-                val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id)
+                val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id, activeConversationId)
                 status = result.message
                 audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
                 runningComponent = null

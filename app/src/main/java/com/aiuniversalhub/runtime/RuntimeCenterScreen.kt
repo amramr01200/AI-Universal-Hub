@@ -1,5 +1,7 @@
 package com.aiuniversalhub.runtime
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +25,11 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     var runtimeId by remember { mutableStateOf("termux") }
     var workDir by remember { mutableStateOf("/data/data/com.termux/files/home") }
     var termuxInstalled by remember { mutableStateOf(TermuxBridgeAdapter.isInstalled(context)) }
+    var runCommandGranted by remember { mutableStateOf(TermuxBridgeAdapter.canRunCommands(context)) }
+    val runCommandPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        runCommandGranted = granted
+        status = if (granted) (if (isArabic) "تم منح إذن تشغيل الأوامر." else "RUN_COMMAND permission granted.") else (if (isArabic) "لم يُمنح الإذن. افتحي إعدادات التطبيق وامنحي إذن RUN_COMMAND." else "Permission was not granted. Open app settings and grant RUN_COMMAND.")
+    }
     var status by remember { mutableStateOf("") }
     var runningComponent by remember { mutableStateOf<String?>(null) }
     var pendingApproval by remember { mutableStateOf<RuntimeComponent?>(null) }
@@ -66,7 +73,12 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                                 ?: run { status = if (isArabic) "تعذر فتح Termux" else "Could not open Termux" }
                         }) { Text(if (isArabic) "فتح Termux للإعداد" else "Open Termux setup") }
                     }
-                    Text(if (isArabic) "فعّلي السماح بتشغيل الأوامر من تطبيقات خارجية وامنحي إذن RUN_COMMAND." else "Enable external-app command execution in Termux and grant RUN_COMMAND permission.", style = MaterialTheme.typography.bodySmall)
+                    if (termuxInstalled && !runCommandGranted) {
+                        OutlinedButton(onClick = { runCommandPermissionLauncher.launch("com.termux.permission.RUN_COMMAND") }) {
+                            Text(if (isArabic) "طلب إذن RUN_COMMAND" else "Request RUN_COMMAND permission")
+                        }
+                    }
+                    Text(if (isArabic) "فعّلي السماح بتشغيل الأوامر من تطبيقات خارجية داخل Termux. حالة الإذن: " + (if (runCommandGranted) "ممنوح" else "غير ممنوح") else "Enable external-app command execution in Termux. Permission: " + (if (runCommandGranted) "granted" else "not granted"), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

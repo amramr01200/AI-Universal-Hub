@@ -674,7 +674,28 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                             newProviderUrl = ""
                             newProviderKey = ""
                             showAddProvider = false
-                            status = if (isArabic) "اتضاف المزود بشكل مستقل. حدّثي النماذج لاكتشاف نماذجه." else "Provider added independently. Refresh models to discover its models."
+                            status = if (isArabic) "تم حفظ المزود. جارٍ اختبار الاتصال واكتشاف النماذج..." else "Provider saved. Testing connection and discovering models..."
+                            busy = true
+                            scope.launch {
+                                try {
+                                    val raw = withContext(Dispatchers.IO) {
+                                        client.listModels(cleanUrl, apiKey)
+                                    }
+                                    val discovered = client.parseModelIds(raw)
+                                    store.saveModels(id, discovered)
+                                    if (providerStorageId(providerName, registeredProviders) == id) {
+                                        modelOptions = discovered
+                                        if (discovered.isNotEmpty()) updateSelectedModel(discovered.first())
+                                    }
+                                    status = if (discovered.isEmpty())
+                                        (if (isArabic) "اتصل المزود لكن لم يُرجع نماذج في صيغة متوافقة." else "Provider connected but returned no compatible models.")
+                                    else (if (isArabic) "تم اكتشاف وحفظ ${discovered.size} نموذجًا من $cleanName." else "Discovered and saved ${discovered.size} models from $cleanName.")
+                                } catch (e: Exception) {
+                                    status = e.message ?: if (isArabic) "فشل اختبار اتصال المزود. راجعي الرابط والمفتاح." else "Provider connection test failed. Check URL and API key."
+                                } finally {
+                                    busy = false
+                                }
+                            }
                         }
                     }) { Text(if (isArabic) "إضافة وحفظ" else "Add and save") }
                 },

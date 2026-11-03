@@ -219,7 +219,7 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                 threads = threads.map { thread ->
                     if (thread.id == selectedId) thread.copy(messages = thread.messages + newMessages) else thread
                 }
-                val updatedIds = (importedIds + newlyImported).takeLast(100)
+                val updatedIds = (importedIds + newlyImported).toList().takeLast(100)
                 val savedIds = JSONArray()
                 updatedIds.forEach { savedIds.put(it) }
                 chatPrefs.edit().putString(importKey, savedIds.toString()).apply()

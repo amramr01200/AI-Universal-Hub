@@ -16,6 +16,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -94,7 +97,7 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSettingsConsumed: () -> Unit = {}, topSelectedModel: String = "", onTopModelSelected: (String) -> Unit = {}, onTopModelOptionsChanged: (String, List<String>) -> Unit = { _, _ -> }, onTopTokenCountChanged: (String) -> Unit = {}) {
+fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSettingsConsumed: () -> Unit = {}, topSelectedModel: String = "", onTopModelSelected: (String) -> Unit = {}, onTopModelOptionsChanged: (String, List<String>) -> Unit = { _, _ -> }, onTopTokenCountChanged: (String) -> Unit = {}, onSelectedConversationChanged: (Int) -> Unit = {}) {
     val context = LocalContext.current
     val store = remember { SecureStore(context) }
     val client = remember { AiClient() }
@@ -105,6 +108,14 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         })
     }
     var selectedId by remember { mutableIntStateOf(threads.first().id) }
+    var bridgeRefresh by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) bridgeRefresh++ }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(selectedId) { onSelectedConversationChanged(selectedId) }
     var nextId by remember { mutableIntStateOf((threads.maxOfOrNull { it.id } ?: 0) + 1) }
     var draft by remember { mutableStateOf("") }
     val providerOptions = listOf(
@@ -163,6 +174,32 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     LaunchedEffect(threads) { saveChatThreads(context, threads) }
     LaunchedEffect(threads) {
         if (threads.none { it.id == selectedId }) selectedId = threads.first().id
+    }
+    LaunchedEffect(bridgeRefresh, selectedId) {
+        try {
+            val key = androidx.security.crypto.MasterKey.Builder(context).setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
+            val resultPrefs = androidx.security.crypto.EncryptedSharedPreferences.create(context, com.aiuniversalhub.runtime.TermuxResultReceiver.PREFS, key,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+            val resultConversation = resultPrefs.getInt("conversation_id", -1)
+            val receivedAt = resultPrefs.getLong("received_at", 0L)
+            val output = resultPrefs.getString("stdout", "").orEmpty()
+            val error = resultPrefs.getString("stderr", "").orEmpty()
+            val errorMessage = resultPrefs.getString("error_message", "").orEmpty()
+            val importKey = "termux_imported_$selectedId"
+            val imported = encryptedChatPreferences(context).getLong(importKey, 0L)
+            if (resultConversation == selectedId && receivedAt > imported && (output.isNotBlank() || error.isNotBlank() || errorMessage.isNotBlank())) {
+                val body = buildString {
+                    append("Termux • "); append(resultPrefs.getString("label", "result").orEmpty())
+                    if (output.isNotBlank()) { append("\\n\\n"); append(output) }
+                    if (error.isNotBlank()) { append("\\n\\n[stderr]\\n"); append(error) }
+                    if (errorMessage.isNotBlank()) { append("\\n\\n"); append(errorMessage) }
+                    append("\\n\\nExit code: "); append(resultPrefs.getInt("exit_code", -1))
+                }
+                threads = threads.map { if (it.id == selectedId) it.copy(messages = it.messages + ChatMessage("tool", body)) else it }
+                encryptedChatPreferences(context).edit().putLong(importKey, receivedAt).apply()
+            }
+        } catch (_: Exception) { }
     }
     val selected = threads.firstOrNull { it.id == selectedId } ?: threads.first()
     val selectedModel = selected.model
@@ -346,7 +383,7 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                         ) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(if (msg.role == "user") (if (isArabic) "أنتِ" else "You") else "AI",
+                                    Text(if (msg.role == "user") (if (isArabic) "أنتِ" else "You") else if (msg.role == "tool") "Termux" else "AI",
                                         modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
                                         color = androidx.compose.ui.graphics.Color(0xFF98722F))
                                     TextButton(onClick = {

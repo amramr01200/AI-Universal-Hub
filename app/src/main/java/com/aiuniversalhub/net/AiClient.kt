@@ -23,7 +23,10 @@ class AiClient {
         require(normalized.startsWith("https://") || normalized.startsWith("http://")) {
             "Enter a valid provider URL beginning with http:// or https://"
         }
-        return normalized + path
+        val deepSeekBase = if (normalized.equals("https://api.deepseek.com", ignoreCase = true)) {
+            "$normalized/v1"
+        } else normalized
+        return deepSeekBase + path
     }
 
     private fun requestBuilder(baseUrl: String, apiKey: String, path: String): Request.Builder {
@@ -41,11 +44,28 @@ class AiClient {
     }
 
     fun parseModelIds(raw: String): List<String> {
-        val root = JSONObject(raw)
-        val data = root.optJSONArray("data") ?: root.optJSONArray("models") ?: JSONArray()
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        val data = try {
+            when {
+                trimmed.startsWith("[") -> JSONArray(trimmed)
+                else -> {
+                    val root = JSONObject(trimmed)
+                    root.optJSONArray("data")
+                        ?: root.optJSONArray("models")
+                        ?: root.optJSONObject("data")?.optJSONArray("models")
+                        ?: root.optJSONObject("result")?.optJSONArray("models")
+                        ?: JSONArray()
+                }
+            }
+        } catch (_: Exception) {
+            return emptyList()
+        }
         return (0 until data.length()).mapNotNull { index ->
-            val item = data.optJSONObject(index)
-            (item?.optString("id") ?: item?.optString("name"))?.takeIf { it.isNotBlank() && it != "null" }
+            val item = data.optJSONObject(index) ?: return@mapNotNull null
+            listOf("id", "name", "model").firstNotNullOfOrNull { field ->
+                item.optString(field).takeIf { it.isNotBlank() && it != "null" }
+            }
         }.distinct().sorted()
     }
 

@@ -183,27 +183,46 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     }
     LaunchedEffect(bridgeRefresh, selectedId) {
         try {
-            val key = androidx.security.crypto.MasterKey.Builder(context).setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
-            val resultPrefs = androidx.security.crypto.EncryptedSharedPreferences.create(context, com.aiuniversalhub.runtime.TermuxResultReceiver.PREFS, key,
+            val key = androidx.security.crypto.MasterKey.Builder(context)
+                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM).build()
+            val resultPrefs = androidx.security.crypto.EncryptedSharedPreferences.create(
+                context, com.aiuniversalhub.runtime.TermuxResultReceiver.PREFS, key,
                 androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
-            val resultConversation = resultPrefs.getInt("conversation_id", -1)
-            val receivedAt = resultPrefs.getLong("received_at", 0L)
-            val output = resultPrefs.getString("stdout", "").orEmpty()
-            val error = resultPrefs.getString("stderr", "").orEmpty()
-            val errorMessage = resultPrefs.getString("error_message", "").orEmpty()
-            val importKey = "termux_imported_$selectedId"
-            val imported = encryptedChatPreferences(context).getLong(importKey, 0L)
-            if (resultConversation == selectedId && receivedAt > imported && (output.isNotBlank() || error.isNotBlank() || errorMessage.isNotBlank())) {
+            val chatPrefs = encryptedChatPreferences(context)
+            val importKey = "termux_imported_ids_$selectedId"
+            val importedArray = try { JSONArray(chatPrefs.getString(importKey, "[]")) } catch (_: Exception) { JSONArray() }
+            val importedIds = mutableSetOf<String>()
+            for (index in 0 until importedArray.length()) importedIds.add(importedArray.optString(index))
+            val history = try { JSONArray(resultPrefs.getString("results_history", "[]")) } catch (_: Exception) { JSONArray() }
+            val newMessages = mutableListOf<ChatMessage>()
+            val newlyImported = mutableListOf<String>()
+            for (index in 0 until history.length()) {
+                val record = history.optJSONObject(index) ?: continue
+                val id = record.optString("id")
+                if (id.isBlank() || id in importedIds || record.optInt("conversation_id", -1) != selectedId) continue
+                val output = record.optString("stdout")
+                val error = record.optString("stderr")
+                val errorMessage = record.optString("error_message")
+                if (output.isBlank() && error.isBlank() && errorMessage.isBlank()) continue
                 val body = buildString {
-                    append("Termux • "); append(resultPrefs.getString("label", "result").orEmpty())
-                    if (output.isNotBlank()) { append("\\n\\n"); append(output) }
-                    if (error.isNotBlank()) { append("\\n\\n[stderr]\\n"); append(error) }
-                    if (errorMessage.isNotBlank()) { append("\\n\\n"); append(errorMessage) }
-                    append("\\n\\nExit code: "); append(resultPrefs.getInt("exit_code", -1))
+                    append("Termux • "); append(record.optString("label", "result"))
+                    if (output.isNotBlank()) { append("\n\n"); append(output) }
+                    if (error.isNotBlank()) { append("\n\n[stderr]\n"); append(error) }
+                    if (errorMessage.isNotBlank()) { append("\n\n"); append(errorMessage) }
+                    append("\n\nExit code: "); append(record.optInt("exit_code", -1))
                 }
-                threads = threads.map { if (it.id == selectedId) it.copy(messages = it.messages + ChatMessage("tool", body)) else it }
-                encryptedChatPreferences(context).edit().putLong(importKey, receivedAt).apply()
+                newMessages.add(ChatMessage("tool", body))
+                newlyImported.add(id)
+            }
+            if (newMessages.isNotEmpty()) {
+                threads = threads.map { thread ->
+                    if (thread.id == selectedId) thread.copy(messages = thread.messages + newMessages) else thread
+                }
+                val updatedIds = (importedIds + newlyImported).takeLast(100)
+                val savedIds = JSONArray()
+                updatedIds.forEach { savedIds.put(it) }
+                chatPrefs.edit().putString(importKey, savedIds.toString()).apply()
             }
         } catch (_: Exception) { }
     }

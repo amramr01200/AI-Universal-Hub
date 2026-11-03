@@ -26,11 +26,11 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     var workDir by remember { mutableStateOf("/data/data/com.termux/files/home") }
     var termuxInstalled by remember { mutableStateOf(TermuxBridgeAdapter.isInstalled(context)) }
     var runCommandGranted by remember { mutableStateOf(TermuxBridgeAdapter.canRunCommands(context)) }
+    var status by remember { mutableStateOf("") }
     val runCommandPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         runCommandGranted = granted
         status = if (granted) (if (isArabic) "تم منح إذن تشغيل الأوامر." else "RUN_COMMAND permission granted.") else (if (isArabic) "لم يُمنح الإذن. افتحي إعدادات التطبيق وامنحي إذن RUN_COMMAND." else "Permission was not granted. Open app settings and grant RUN_COMMAND.")
     }
-    var status by remember { mutableStateOf("") }
     var runningComponent by remember { mutableStateOf<String?>(null) }
     var pendingApproval by remember { mutableStateOf<RuntimeComponent?>(null) }
     val audit = remember { ApprovalAuditStore(context) }

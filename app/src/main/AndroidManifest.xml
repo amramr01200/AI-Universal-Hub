@@ -21,6 +21,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".runtime.TermuxResultReceiver"
+            android:exported="false" />
         <service
             android:name=".background.BackgroundTaskService"
             android:exported="false"

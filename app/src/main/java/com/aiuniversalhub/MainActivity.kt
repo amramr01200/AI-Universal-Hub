@@ -80,6 +80,7 @@ fun HubApp() {
     val secureStore = remember { SecureStore(context) }
     var isArabic by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableIntStateOf(0) }
+    var activeConversationId by remember { mutableIntStateOf(1) }
     var termuxInstalled by remember { mutableStateOf(isPackageInstalled(context, "com.termux")) }
     var message by remember { mutableStateOf("") }
     var selectedTool by remember { mutableStateOf<ToolCard?>(null) }
@@ -212,7 +213,7 @@ fun HubApp() {
                     onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF463D2D)
                 )) {
                     Surface(color = androidx.compose.ui.graphics.Color.White, modifier = Modifier.fillMaxSize().padding(padding)) {
-                        ChatHomeScreen(isArabic = isArabic, openAiSettings = requestChatAiSettings, onAiSettingsConsumed = { requestChatAiSettings = false }, topSelectedModel = topSelectedModel, onTopModelSelected = { topSelectedModel = it }, onTopModelOptionsChanged = { model, options -> topSelectedModel = model; topModelOptions = options }, onTopTokenCountChanged = { topTokenCount = it })
+                        ChatHomeScreen(isArabic = isArabic, openAiSettings = requestChatAiSettings, onAiSettingsConsumed = { requestChatAiSettings = false }, topSelectedModel = topSelectedModel, onTopModelSelected = { topSelectedModel = it }, onTopModelOptionsChanged = { model, options -> topSelectedModel = model; topModelOptions = options }, onTopTokenCountChanged = { topTokenCount = it }, onSelectedConversationChanged = { activeConversationId = it })
                     }
                 }
             } else SelectionContainer {
@@ -281,7 +282,7 @@ fun HubApp() {
                 } else if (selectedTab == 4) {
                     item { GitHubAgentScreen(isArabic = isArabic) }
                 } else if (selectedTab == 5) {
-                    item { RuntimeCenterScreen(isArabic = isArabic) }
+                    item { RuntimeCenterScreen(isArabic = isArabic, activeConversationId = activeConversationId) }
                 } else {
                     item {
                         Text(if (isArabic) "شبكات ومزوّدو الخدمات الخارجية" else "External AI provider networks",

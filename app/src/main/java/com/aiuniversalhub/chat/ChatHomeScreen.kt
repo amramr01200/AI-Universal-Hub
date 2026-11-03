@@ -116,6 +116,12 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(selectedId) { onSelectedConversationChanged(selectedId) }
+    LaunchedEffect(selectedId) {
+        while (true) {
+            bridgeRefresh++
+            kotlinx.coroutines.delay(1000)
+        }
+    }
     var nextId by remember { mutableIntStateOf((threads.maxOfOrNull { it.id } ?: 0) + 1) }
     var draft by remember { mutableStateOf("") }
     val providerOptions = listOf(

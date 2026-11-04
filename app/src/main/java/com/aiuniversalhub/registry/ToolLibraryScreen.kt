@@ -2,6 +2,8 @@ package com.aiuniversalhub.registry
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.aiuniversalhub.data.SecureStore
+import com.aiuniversalhub.data.ToolAnalyzer
 import com.aiuniversalhub.net.AiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,10 +32,46 @@ fun ToolLibraryScreen(isArabic: Boolean) {
     var url by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
 
+    // متغيرات تحليل الملفات
+    var showAnalyzeDialog by remember { mutableStateOf(false) }
+    var analyzedModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var analyzeName by remember { mutableStateOf("") }
+    var analyzeUrl by remember { mutableStateOf("") }
+
+    // منتقي الملفات لتحليل الكود
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    if (content != null) {
+                        val extractedModels = ToolAnalyzer.extractModelsFromCode(content)
+                        withContext(Dispatchers.Main) {
+                            analyzedModels = extractedModels
+                            analyzeName = "أداة محللة" // اسم افتراضي
+                            analyzeUrl = ""
+                            showAnalyzeDialog = true
+                        }
+                    }
+                } catch (e: Exception) {
+                    // التعامل مع الخطأ إن لزم الأمر
+                }
+            }
+        }
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(if (isArabic) "مكتبتي: النماذج والأدوات" else "My Models & Tools", style = MaterialTheme.typography.headlineSmall)
         Text(if (isArabic) "عند حفظ مفتاح أداة لها واجهة نماذج متوافقة، يحاول التطبيق اكتشاف نماذجها وحفظها تلقائيًا كمزود مستقل." else "When you save credentials for a tool exposing a compatible model API, the Hub discovers and saves its models as a separate provider.")
-        Button(onClick = { showAdd = true }) { Text(if (isArabic) "＋ إضافة أداة جديدة" else "＋ Add new tool") }
+        
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { showAdd = true }) { Text(if (isArabic) "＋ إضافة أداة جديدة" else "＋ Add new tool") }
+            // زر تحليل ملف الأداة الجديد
+            OutlinedButton(onClick = { filePicker.launch("*/*") }) {
+                Text(if (isArabic) "📄 تحليل ملف أداة" else "📄 Analyze tool file")
+            }
+        }
+
         if (tools.isEmpty()) Text(if (isArabic) "لم تضف أدوات بعد." else "No saved tools yet.")
         tools.forEach { tool ->
             val providerId = "tool-${tool.id}"
@@ -142,6 +181,52 @@ fun ToolLibraryScreen(isArabic: Boolean) {
                 }) { Text(if (isArabic) "حفظ" else "Save") }
             },
             dismissButton = { TextButton(onClick = { showAdd = false }) { Text(if (isArabic) "إلغاء" else "Cancel") } }
+        )
+    }
+
+    // نافذة تأكيد النماذج المستخرجة من الملف
+    if (showAnalyzeDialog) {
+        AlertDialog(
+            onDismissRequest = { showAnalyzeDialog = false },
+            title = { Text(if (isArabic) "تم تحليل الملف!" else "File analyzed!") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (analyzedModels.isEmpty()) {
+                        Text(if (isArabic) "لم يتم العثور على أسماء نماذج معروفة داخل الكود." else "No known model names were found in the code.")
+                    } else {
+                        Text(if (isArabic) "تم استخراج ${analyzedModels.size} نموذج من الكود:" else "Extracted ${analyzedModels.size} models from code:")
+                        analyzedModels.take(10).forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                        if (analyzedModels.size > 10) Text("...", style = MaterialTheme.typography.bodySmall)
+                        
+                        HorizontalDivider()
+                        Text(if (isArabic) "أدخلي رابط الـ API (اختياري) لحفظها كمزود:" else "Enter API URL (optional) to save as provider:")
+                        OutlinedTextField(analyzeName, { analyzeName = it }, label = { Text(if (isArabic) "اسم الأداة" else "Tool Name") }, singleLine = true)
+                        OutlinedTextField(analyzeUrl, { analyzeUrl = it }, label = { Text("Base URL") }, singleLine = true)
+                    }
+                }
+            },
+            confirmButton = {
+                if (analyzedModels.isNotEmpty()) {
+                    TextButton(onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            val newTool = ToolRegistry.newTool(analyzeName.ifBlank { "Analyzed Tool" }, "Analyzed Code", analyzeUrl, "Extracted from file")
+                            registry.save(newTool)
+                            val providerId = "tool-${newTool.id}"
+                            // حفظ النماذج المكتشفة
+                            secureStore.saveProvider(providerId, newTool.name, analyzeUrl, "")
+                            secureStore.saveModels(providerId, analyzedModels)
+                            
+                            withContext(Dispatchers.Main) {
+                                tools = registry.all()
+                                showAnalyzeDialog = false
+                            }
+                        }
+                    }) { Text(if (isArabic) "موافقة وحفظ" else "Approve & Save") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAnalyzeDialog = false }) { Text(if (isArabic) "إغلاق" else "Close") }
+            }
         )
     }
 }

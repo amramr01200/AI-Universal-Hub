@@ -37,10 +37,11 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     var runCommandGranted by remember { mutableStateOf(TermuxBridgeAdapter.canRunCommands(context)) }
     var status by remember { mutableStateOf("") }
     
-    // متغيرات البحث التلقائي
+    // متغيرات البحث التلقائي وأوامر التشغيل
     var isScanning by remember { mutableStateOf(false) }
     var showScanDialog by remember { mutableStateOf(false) }
-    var discoveredTools by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) } // Name, URL, ID
+    var discoveredTools by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
+    var startCommands by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // لحفظ الأوامر المكتوبة
 
     val runCommandPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         runCommandGranted = granted
@@ -73,13 +74,11 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         if (result.submitted) status = if (isArabic) "تم إرسال طلب الفحص؛ اضغطي تحديث النتائج بعد لحظات." else result.message
     }
 
-    // دالة البحث التلقائي عن الأدوات المحلية
     fun scanLocalTools() {
         isScanning = true
         status = if (isArabic) "جاري البحث عن أدوات محلية تعمل في الخلفية..." else "Scanning for local tools in background..."
         scope.launch {
             val found = mutableListOf<Triple<String, String, String>>()
-            // المنافذ الشائعة لأدوات الذكاء الاصطناعي
             val knownPorts = mapOf(
                 "Ollama" to "http://127.0.0.1:11434/v1",
                 "LM Studio" to "http://127.0.0.1:1234/v1",
@@ -89,20 +88,23 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
             withContext(Dispatchers.IO) {
                 knownPorts.forEach { (name, url) ->
                     try {
-                        // محاولة الاتصال بدون مفتاح API (لأنها محلية)
                         val raw = aiClient.listModels(url, "")
                         if (raw.isNotBlank()) {
                             val id = "local-" + name.lowercase().replace(" ", "-")
                             found.add(Triple(name, url, id))
                         }
-                    } catch (_: Exception) {
-                        // تجاهل الخطأ إذا كان المنفذ مغلقاً
-                    }
+                    } catch (_: Exception) { }
                 }
             }
             isScanning = false
             if (found.isNotEmpty()) {
                 discoveredTools = found
+                // نضع أوامر افتراضية مبدئية لكل أداة
+                val defaultCommands = mutableMapOf<String, String>()
+                found.forEach { (name, _, id) -> 
+                    if (name == "Ollama") defaultCommands[id] = "ollama serve &"
+                }
+                startCommands = defaultCommands
                 showScanDialog = true
             } else {
                 status = if (isArabic) "لم يتم العثور على أدوات تعمل حالياً. تأكدي من تشغيل Ollama أو غيرها في Termux." else "No running tools found. Make sure Ollama or others are running in Termux."
@@ -116,7 +118,6 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
             Text(if (isArabic) "إدارة ملفات ربط الوكلاء بالمحادثات. حفظ الربط لا يعني أن Termux متصل ثنائي الاتجاه؛ يلزم إعداد الجسر على الجهاز." else "Manage agent profiles linked to chat IDs. Saving a profile does not create a live two-way Termux connection; the device bridge must also be configured.")
         }
         
-        // قسم البحث التلقائي الجديد
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -225,19 +226,29 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         item { Text(if (isArabic) "إرسال الأمر لا يثبت اكتمال التنفيذ؛ النتيجة الحالية تُراجع من إشعارات ومخرجات Termux." else "Command submission is not proof of completion; inspect Termux notifications and output.", style = MaterialTheme.typography.bodySmall) }
     }
 
-    // نافذة الموافقة على الأدوات المكتشفة
+    // نافذة الموافقة على الأدوات المكتشفة (تم إضافة حقل أمر التشغيل)
     if (showScanDialog && discoveredTools.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showScanDialog = false },
             title = { Text(if (isArabic) "تم العثور على أدوات محلية!" else "Local tools found!") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (isArabic) "هل توافقين على إضافة هذه الأدوات ونماذجها إلى قائمة الاختيار؟" else "Do you approve adding these tools and their models to the selection list?")
-                    discoveredTools.forEach { (name, url, _) ->
+                    Text(if (isArabic) "هل توافقين على إضافة هذه الأدوات؟ اكتبي أمر التشغيل لكل أداة (مثل ollama serve &)." else "Do you approve adding these tools? Enter the start command for each (e.g., ollama serve &).")
+                    discoveredTools.forEach { (name, url, id) ->
                         Card {
-                            Column(Modifier.padding(8.dp)) {
+                            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(name, style = MaterialTheme.typography.titleSmall)
-                                Text(url, style = MaterialTheme.typography.bodySmall)
+                                Text(url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                OutlinedTextField(
+                                    value = startCommands[id] ?: "",
+                                    onValueChange = { newCmd ->
+                                        startCommands = startCommands.toMutableMap().apply { put(id, newCmd) }
+                                    },
+                                    label = { Text(if (isArabic) "أمر التشغيل (Start Command)" else "Start Command") },
+                                    placeholder = { Text("ollama serve &") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
                             }
                         }
                     }
@@ -248,6 +259,11 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                     scope.launch(Dispatchers.IO) {
                         discoveredTools.forEach { (name, url, id) ->
                             secureStore.saveProvider(id, name, url, "")
+                            // حفظ أمر التشغيل
+                            val cmd = startCommands[id] ?: ""
+                            if (cmd.isNotBlank()) {
+                                secureStore.saveProviderStartCommand(id, cmd)
+                            }
                             try {
                                 val raw = aiClient.listModels(url, "")
                                 val models = aiClient.parseModelIds(raw)
@@ -255,7 +271,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                             } catch (_: Exception) {}
                         }
                         withContext(Dispatchers.Main) {
-                            status = if (isArabic) "تمت إضافة الأدوات المحلية بنجاح! ستجدينها في قائمة اختيار النموذج." else "Local tools added successfully! You will find them in the model selection list."
+                            status = if (isArabic) "تمت إضافة الأدوات المحلية وأوامر التشغيل بنجاح!" else "Local tools and start commands added successfully!"
                             showScanDialog = false
                         }
                     }
@@ -267,7 +283,6 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         )
     }
 
-    // نافذة الموافقة على تثبيت الحزم (القديمة)
     if (pendingApproval != null) {
         val selected = pendingApproval!!
         AlertDialog(
@@ -283,13 +298,4 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 runningComponent = selected.id
                 val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id, activeConversationId)
                 status = result.message
-                audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
-                runningComponent = null
-            }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } },
-            dismissButton = { TextButton(onClick = {
-                audit.record("termux_command", selected.id + ": " + selected.installCommand, "rejected")
-                pendingApproval = null
-            }) { Text(if (isArabic) "رفض" else "Deny") } }
-        )
-    }
-}
+                audit.record("termux_command", selected.id + ": " + selected.installCommand, if 

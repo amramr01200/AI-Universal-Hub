@@ -38,20 +38,17 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     var status by remember { mutableStateOf("") }
     
     var isScanning by remember { mutableStateOf(false) }
-    var showScanDialog by remember { mutableStateOf(false) }
-    var discoveredTools by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
-    var startCommands by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-
-    val runCommandPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        runCommandGranted = granted
-        status = if (granted) (if (isArabic) "تم منح إذن تشغيل الأوامر." else "RUN_COMMAND permission granted.") else (if (isArabic) "لم يُمنح الإذن. افتحي إعدادات التطبيق وامنحي إذن RUN_COMMAND." else "Permission was not granted. Open app settings and grant RUN_COMMAND.")
-    }
     var runningComponent by remember { mutableStateOf<String?>(null) }
     var pendingApproval by remember { mutableStateOf<RuntimeComponent?>(null) }
     val audit = remember { ApprovalAuditStore(context) }
     var bridgeOutput by remember { mutableStateOf("") }
     var bridgeError by remember { mutableStateOf("") }
     var bridgeMeta by remember { mutableStateOf("") }
+
+    val runCommandPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        runCommandGranted = granted
+        status = if (granted) (if (isArabic) "تم منح إذن تشغيل الأوامر." else "RUN_COMMAND permission granted.") else (if (isArabic) "لم يُمنح الإذن. افتحي إعدادات التطبيق وامنحي إذن RUN_COMMAND." else "Permission was not granted. Open app settings and grant RUN_COMMAND.")
+    }
 
     fun refreshBridgeResult() {
         try {
@@ -76,34 +73,10 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         }
     }
 
-    // دالة الاتصال المباشر بـ Ollama (تتجاوز البحث الطويل)
-    fun directConnectOllama() {
+    // الدالة الجديدة: بحث سريع، إضافة تلقائية، وحفظ النماذج بدون أي نوافذ
+    fun scanAndAutoAddTools() {
         isScanning = true
-        status = if (isArabic) "جاري الاتصال المباشر بـ Ollama..." else "Connecting directly to Ollama..."
-        scope.launch {
-            try {
-                val url = "http://127.0.0.1:11434/v1"
-                val raw = withContext(Dispatchers.IO) { aiClient.listModels(url, "") }
-                if (raw.isNotBlank()) {
-                    discoveredTools = listOf(Triple("Ollama", url, "local-ollama"))
-                    startCommands = mapOf("local-ollama" to "ollama serve &")
-                    showScanDialog = true
-                    status = if (isArabic) "تم العثور على Ollama!" else "Ollama found!"
-                } else {
-                    status = if (isArabic) "Ollama لم يرجع أي نماذج." else "Ollama returned no models."
-                }
-            } catch (ex: Exception) {
-                status = if (isArabic) "فشل الاتصال المباشر: ${ex.message}. تأكدي من فتح Termux وتشغيل ollama serve" else "Direct connect failed: ${ex.message}"
-            } finally {
-                isScanning = false
-            }
-        }
-    }
-
-    // دالة البحث السريع عن الأدوات
-    fun scanLocalTools() {
-        isScanning = true
-        status = if (isArabic) "جاري البحث السريع في المنافذ الشائعة..." else "Fast scanning common ports..."
+        status = if (isArabic) "جاري البحث السريع والإضافة التلقائية..." else "Fast scanning and auto-adding..."
         scope.launch {
             val found = mutableListOf<Triple<String, String, String>>()
             val knownPorts = mapOf(
@@ -115,7 +88,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 "Generic Python API" to "http://127.0.0.1:8000/v1"
             )
             
-            // استخدام الفحص السريع المتوازي
+            // 1. الفحص السريع المتوازي
             withContext(Dispatchers.IO) {
                 knownPorts.forEach { (name, url) ->
                     if (aiClient.quickScan(url)) {
@@ -125,19 +98,42 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 }
             }
             
-            isScanning = false
+            // 2. الإضافة والحفظ التلقائي
             if (found.isNotEmpty()) {
-                discoveredTools = found
-                val defaultCommands = mutableMapOf<String, String>()
-                found.forEach { (name, _, id) -> 
-                    if (name == "Ollama") defaultCommands[id] = "ollama serve &"
-                    else if (name == "LM Studio") defaultCommands[id] = "lms server start &"
+                withContext(Dispatchers.IO) {
+                    found.forEach { (name, url, id) ->
+                        // حفظ المزود
+                        secureStore.saveProvider(id, name, url, "")
+                        
+                        // تعيين أمر التشغيل الافتراضي للأداة
+                        val defaultCmd = when(name) {
+                            "Ollama" -> "ollama serve &"
+                            "LM Studio" -> "lms server start &"
+                            else -> ""
+                        }
+                        if (defaultCmd.isNotBlank()) {
+                            secureStore.saveProviderStartCommand(id, defaultCmd)
+                        }
+                        
+                        // جلب النماذج وحفظها
+                        try {
+                            val raw = aiClient.listModels(url, "")
+                            val models = aiClient.parseModelIds(raw)
+                            secureStore.saveModels(id, models)
+                        } catch (_: Exception) {}
+                    }
                 }
-                startCommands = defaultCommands
-                showScanDialog = true
+                
+                withContext(Dispatchers.Main) {
+                    status = if (isArabic) "تمت إضافة وحفظ ${found.size} أداة ونماذجها بنجاح!" else "Successfully added and saved ${found.size} tools and their models!"
+                }
             } else {
-                status = if (isArabic) "لم يتم العثور على أدوات تعمل حالياً. تأكدي من تشغيل الأداة في Termux أو الكمبيوتر." else "No running tools found. Make sure your tool is running."
+                withContext(Dispatchers.Main) {
+                    status = if (isArabic) "لم يتم العثور على أدوات تعمل حالياً. تأكدي من تشغيل الأداة." else "No running tools found. Make sure a tool is running."
+                }
             }
+            
+            isScanning = false
         }
     }
 
@@ -150,24 +146,15 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (isArabic) "البحث التلقائي عن أدوات Termux" else "Auto-Discover Termux Tools", style = MaterialTheme.typography.titleMedium)
-                    Text(if (isArabic) "سيقوم التطبيق بالبحث في المنافذ الشائعة واستخراج نماذجها تلقائياً." else "The app will scan common ports and automatically extract models.", style = MaterialTheme.typography.bodySmall)
+                    Text(if (isArabic) "البحث التلقائي الشامل" else "Comprehensive Auto-Scan", style = MaterialTheme.typography.titleMedium)
+                    Text(if (isArabic) "سيقوم التطبيق بفحص جميع المنافذ الشائعة، وإضافة الأدوات، وحفظ نماذجها تلقائياً." else "The app will scan all common ports, add tools, and save models automatically.", style = MaterialTheme.typography.bodySmall)
                     
                     Button(
                         enabled = !isScanning && termuxInstalled, 
-                        onClick = { scanLocalTools() },
+                        onClick = { scanAndAutoAddTools() },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (isScanning) (if (isArabic) "جاري البحث..." else "Scanning...") else (if (isArabic) "بدء البحث التلقائي" else "Start Auto-Scan"))
-                    }
-
-                    // زر الاتصال المباشر الجديد
-                    OutlinedButton(
-                        enabled = !isScanning && termuxInstalled, 
-                        onClick = { directConnectOllama() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (isArabic) "⚡ اتصال مباشر بـ Ollama (127.0.0.1:11434)" else "⚡ Direct Connect to Ollama")
+                        Text(if (isScanning) (if (isArabic) "جاري البحث والإضافة..." else "Scanning & Adding...") else (if (isArabic) "بحث وإضافة تلقائية للجميع" else "Auto-Scan & Add All"))
                     }
                 }
             }
@@ -270,47 +257,35 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         item { Text(if (isArabic) "إرسال الأمر لا يثبت اكتمال التنفيذ؛ النتيجة الحالية تُراجع من إشعارات ومخرجات Termux." else "Command submission is not proof of completion; inspect Termux notifications and output.", style = MaterialTheme.typography.bodySmall) }
     }
 
-    if (showScanDialog && discoveredTools.isNotEmpty()) {
+    if (pendingApproval != null) {
+        val selected = pendingApproval!!
         AlertDialog(
-            onDismissRequest = { showScanDialog = false },
-            title = { Text(if (isArabic) "تم العثور على أدوات محلية!" else "Local tools found!") },
-            text = {
+            onDismissRequest = { pendingApproval = null },
+            title = { Text(if (isArabic) "تأكيد تنفيذ الأمر" else "Confirm command execution") },
+            text = { 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (isArabic) "هل توافقين على إضافة هذه الأدوات؟ اكتبي أمر التشغيل لكل أداة." else "Do you approve adding these tools? Enter the start command for each.")
-                    discoveredTools.forEach { (name, url, id) ->
-                        Card {
-                            Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(name, style = MaterialTheme.typography.titleSmall)
-                                Text(url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                                OutlinedTextField(
-                                    value = startCommands[id] ?: "",
-                                    onValueChange = { newCmd ->
-                                        startCommands = startCommands.toMutableMap().apply { put(id, newCmd) }
-                                    },
-                                    label = { Text(if (isArabic) "أمر التشغيل" else "Start Command") },
-                                    placeholder = { Text("ollama serve &") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
-                            }
-                        }
-                    }
-                }
+                    Text(if (isArabic) "راجعي الأمر قبل الموافقة:" else "Review the command before approval:")
+                    Text(selected.installCommand)
+                    Text(if (isArabic) "سينفذ داخل Termux بصلاحياته." else "It will execute inside Termux with its own permissions.")
+                } 
             },
-            confirmButton = {
+            confirmButton = { 
                 TextButton(onClick = {
-                    scope.launch(Dispatchers.IO) {
-                        discoveredTools.forEach { (name, url, id) ->
-                            secureStore.saveProvider(id, name, url, "")
-                            val cmd = startCommands[id] ?: ""
-                            if (cmd.isNotBlank()) {
-                                secureStore.saveProviderStartCommand(id, cmd)
-                            }
-                            try {
-                                val raw = aiClient.listModels(url, "")
-                                val models = aiClient.parseModelIds(raw)
-                                secureStore.saveModels(id, models)
-                            } catch (_: Exception) {}
-                        }
-                        withContext(Dispatchers.Main) {
-                            status = if (isArabic) "تمت إضافة الأدوات المحلية
+                    pendingApproval = null
+                    runningComponent = selected.id
+                    val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id, activeConversationId)
+                    status = result.message
+                    audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
+                    runningComponent = null
+                }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } 
+            },
+            dismissButton = { 
+                TextButton(onClick = {
+                    audit.record("termux_command", selected.id + ": " + selected.installCommand, "rejected")
+                    pendingApproval = null
+                }) { Text(if (isArabic) "رفض" else "Deny") } 
+            }
+        )
+    }
+}
+// END OF FILE

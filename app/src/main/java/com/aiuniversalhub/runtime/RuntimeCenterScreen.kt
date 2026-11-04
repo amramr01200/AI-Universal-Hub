@@ -303,4 +303,13 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                     audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
                     runningComponent = null
                 }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } 
-         
+            },
+            dismissButton = { 
+                TextButton(onClick = {
+                    audit.record("termux_command", selected.id + ": " + selected.installCommand, "rejected")
+                    pendingApproval = null
+                }) { Text(if (isArabic) "رفض" else "Deny") } 
+            }
+        )
+    }
+}

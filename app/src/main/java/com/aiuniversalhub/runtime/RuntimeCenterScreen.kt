@@ -75,14 +75,15 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         }
     }
 
-    // دالة البحث الشامل والمتوازي (تفحص كل الأدوات مرة واحدة)
+    // دالة المسح الشامل والمتوازي (تفحص كل الأدوات مرة واحدة بسرعة)
     fun scanAndAutoAddTools() {
         isScanning = true
         status = if (isArabic) "جاري المسح الشامل لجميع الأدوات..." else "Comprehensive scan for all tools..."
         scope.launch {
             val found = mutableListOf<Triple<String, String, String>>()
+            val errors = mutableListOf<String>()
             
-            // قائمة الأدوات والمنافذ الخاصة بها (تشمل الأدوات التي طلبتها)
+            // قائمة الأدوات والمنافذ الخاصة بها
             val knownTools = mapOf(
                 "Ollama" to "http://127.0.0.1:11434/v1",
                 "LM Studio" to "http://127.0.0.1:1234/v1",
@@ -96,7 +97,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 "Custom Python API" to "http://127.0.0.1:8000/v1"
             )
             
-            // مسح متوازي (في نفس الوقت) لتوفير الوقت ومنع التعليق
+            // مسح متوازي (في نفس الوقت) لتوفير الوقت
             withContext(Dispatchers.IO) {
                 val deferreds = knownTools.map { (name, url) ->
                     async {
@@ -104,8 +105,14 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                             if (aiClient.quickScan(url)) {
                                 val id = "local-" + name.lowercase().replace(" ", "-")
                                 Triple(name, url, id)
-                            } else null
-                        } catch (e: Exception) { null }
+                            } else {
+                                errors.add("$name: لا يوجد رد")
+                                null
+                            }
+                        } catch (e: Exception) {
+                            errors.add("$name: ${e.message}")
+                            null
+                        }
                     }
                 }
                 val results = deferreds.awaitAll().filterNotNull()
@@ -117,7 +124,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                     found.forEach { (name, url, id) ->
                         secureStore.saveProvider(id, name, url, "")
                         
-                        // أوامر التشغيل الافتراضية لكل أداة (لكي يعمل التشغيل التلقائي)
+                        // تعيين أمر التشغيل الافتراضي للأداة
                         val defaultCmd = when(name) {
                             "Ollama" -> "ollama serve &"
                             "LM Studio" -> "lms server start &"

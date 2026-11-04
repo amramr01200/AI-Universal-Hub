@@ -173,6 +173,9 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     var status by remember { mutableStateOf("") }
     var usageLabel by remember { mutableStateOf("") }
     var pendingImage by remember { mutableStateOf<Uri?>(null) }
+    
+    var pendingTextFileContent by remember { mutableStateOf<String?>(null) }
+    var pendingTextFileName by remember { mutableStateOf<String?>(null) }
 
     val allGlobalModels = remember(registeredProviders, bridgeRefresh) {
         val list = mutableListOf<ModelOption>()
@@ -205,7 +208,6 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         }
     }
 
-    // منتقي الملفات لاستيراد JSON
     val jsonPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             busy = true
@@ -235,6 +237,28 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                     withContext(Dispatchers.Main) { status = "فشل قراءة الملف: ${e.message}" }
                 } finally {
                     withContext(Dispatchers.Main) { busy = false }
+                }
+            }
+        }
+    }
+
+    val textFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    val fileName = uri.lastPathSegment ?: "file.txt"
+                    if (content != null) {
+                        withContext(Dispatchers.Main) {
+                            pendingTextFileContent = content
+                            pendingTextFileName = fileName
+                            status = if (isArabic) "تم إرفاق الملف: $fileName" else "File attached: $fileName"
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        status = if (isArabic) "فشل قراءة الملف: ${e.message}" else "Failed to read file: ${e.message}"
+                    }
                 }
             }
         }
@@ -348,44 +372,25 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     }
 
     fun sendMessage() {
-        val prompt = draft.trim()
+        var prompt = draft.trim()
         val imageUri = pendingImage
-        if (prompt.isBlank() && imageUri == null) return
+        val fileContent = pendingTextFileContent
+        val fileName = pendingTextFileName
+        
+        if (prompt.isBlank() && imageUri == null && fileContent == null) return
         if (selected.model.isBlank()) {
             status = if (isArabic) "اختاري نموذج المحادثة من القائمة أولًا، ثم أرسلي الرسالة." else "Select a conversation model before sending."
             return
         }
+        
+        if (fileContent != null) {
+            prompt = "محتوى الملف المرفق ($fileName):\n```\n$fileContent\n```\n\n" + prompt
+        }
+        
         val userText = prompt + if (imageUri != null) (if (prompt.isBlank()) "" else "\n") + (if (isArabic) "📎 صورة مرفقة" else "📎 Image attached") else ""
         val thread = threads.first { it.id == selectedId }
         val updated = thread.copy(
-            title = if (thread.messages.isEmpty()) (prompt.ifBlank { if (isArabic) "تحليل صورة" else "Image question" }).take(36) else thread.title,
+            title = if (thread.messages.isEmpty()) (prompt.ifBlank { if (isArabic) "تحليل ملف/صورة" else "File/Image question" }).take(36) else thread.title,
             messages = thread.messages + ChatMessage("user", userText)
         )
-        threads = threads.map { if (it.id == selectedId) updated else it }
-        draft = ""
-        pendingImage = null
-        busy = true
-        status = ""
-        val targetThreadId = selectedId
-        scope.launch {
-            try {
-                val option = allGlobalModels.find { it.actualName == selected.model }
-                val sendBaseUrl = option?.baseUrl ?: baseUrl
-                val sendApiKey = option?.apiKey ?: apiKey
-                
-                val startCommand = option?.providerId?.let { store.getProviderStartCommand(it) } ?: ""
-                if (startCommand.isNotBlank()) {
-                    status = if (isArabic) "جاري تشغيل الأداة المحلية في الخلفية..." else "Starting local tool in background..."
-                    TermuxBridgeAdapter.sendCustomApprovedCommand(context, startCommand, "auto-start", selectedId)
-                    delay(3000)
-                    status = ""
-                }
-
-                val response = withContext(Dispatchers.IO) {
-                    if (imageUri != null) {
-                        val bytes = context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
-                            ?: error(if (isArabic) "تعذر قراءة الصورة." else "Could not read the image.")
-                        require(bytes.size <= 12 * 1024 * 1024) {
-                            if (isArabic) "حجم الصورة أكبر من 12 ميجابايت." else "Image is larger than 12 MB."
-                        }
-                        val mime = context.contentResolv
+        threads = threads.map { if (it.id == selectedId) updated e

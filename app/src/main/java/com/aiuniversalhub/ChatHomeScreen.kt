@@ -460,11 +460,10 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                 } else {
                     if (isArabic) "الاستهلاك غير متاح" else "Usage unavailable"
                 }
-                val answer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)
-                    ?.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() } ?: response
-                threads = threads.map { t ->
-                    if (t.id == targetThreadId) t.copy(messages = t.messages + ChatMessage("assistant", answer)) else t
-                }
+                  val rawAnswer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)
+                   ?.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() } ?: response
+                 // حذف وسوم التفكير <thought> ... </thought> لتظهر الإجابة فقط
+                val answer = rawAnswer.replace(Regex("<thought>.*?</thought>", RegexOption.DOT_MATCHES_ALL), "").trim().ifBlank { rawAnswer }
                 status = ""
             } catch (ex: Exception) {
                 status = ex.message ?: if (isArabic) "فشل الاتصال" else "Connection failed"

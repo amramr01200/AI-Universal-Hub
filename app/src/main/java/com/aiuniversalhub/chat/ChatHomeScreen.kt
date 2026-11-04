@@ -405,4 +405,585 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
             if (prompt.isNotBlank()) {
                 baseTitle = prompt
             }
-  
+            if (baseTitle.length > 36) {
+                finalTitle = baseTitle.substring(0, 36)
+            } else {
+                finalTitle = baseTitle
+            }
+        }
+
+        val updated = thread.copy(
+            title = finalTitle,
+            messages = thread.messages + ChatMessage("user", userText)
+        )
+        
+        threads = threads.map { t -> if (t.id == selectedId) updated else t }
+        draft = ""
+        pendingImage = null
+        pendingTextFileContent = null
+        pendingTextFileName = null
+        busy = true
+        status = ""
+        val targetThreadId = selectedId
+        
+        scope.launch {
+            try {
+                val option = allGlobalModels.find { it.actualName == selected.model }
+                val sendBaseUrl = option?.baseUrl ?: baseUrl
+                val sendApiKey = option?.apiKey ?: apiKey
+                
+                val startCommand = option?.providerId?.let { store.getProviderStartCommand(it) } ?: ""
+                if (startCommand.isNotBlank()) {
+                    status = if (isArabic) "جاري تشغيل الأداة المحلية..." else "Starting local tool..."
+                    TermuxBridgeAdapter.sendCustomApprovedCommand(context, startCommand, "auto-start", selectedId)
+                    delay(3000)
+                    status = ""
+                }
+
+                val response = withContext(Dispatchers.IO) {
+                    if (imageUri != null) {
+                        val bytes = context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
+                            ?: error(if (isArabic) "تعذر قراءة الصورة." else "Could not read the image.")
+                        require(bytes.size <= 12 * 1024 * 1024) {
+                            if (isArabic) "حجم الصورة كبير." else "Image is too large."
+                        }
+                        val mime = context.contentResolver.getType(imageUri) ?: "image/jpeg"
+                        client.chatWithImageHistory(sendBaseUrl, sendApiKey, selected.model, updated.messages.dropLast(1).map { it.role to it.content }, prompt, mime, Base64.encodeToString(bytes, Base64.NO_WRAP))
+                    } else {
+                        val history = updated.messages.map { it.role to it.content }
+                        client.chatWithHistory(sendBaseUrl, sendApiKey, selected.model, history)
+                    }
+                }
+                val usage = client.parseUsage(response)
+                usageLabel = if (usage.totalTokens != null) {
+                    (if (isArabic) "استهلاك: " else "Usage: ") + usage.totalTokens + (if (isArabic) " توكن" else " tokens")
+                } else {
+                    if (isArabic) "الاستهلاك غير متاح" else "Usage unavailable"
+                }
+                val answer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)
+                    ?.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() } ?: response
+                threads = threads.map { t ->
+                    if (t.id == targetThreadId) t.copy(messages = t.messages + ChatMessage("assistant", answer)) else t
+                }
+                status = ""
+            } catch (ex: Exception) {
+                status = ex.message ?: if (isArabic) "فشل الاتصال" else "Connection failed"
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val messageListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(selected.id, selected.messages.size, busy) {
+        if (selected.messages.isNotEmpty()) messageListState.animateScrollToItem(selected.messages.size - 1)
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.fillMaxHeight().widthIn(min = 280.dp, max = 340.dp),
+                drawerContainerColor = androidx.compose.ui.graphics.Color(0xFF171717)
+            ) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (isArabic) "المحادثات السابقة" else "Chat history", color = androidx.compose.ui.graphics.Color(0xFFD6B56D), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        val id = nextId++
+                        threads = listOf(ChatThread(id, if (isArabic) "محادثة جديدة" else "New chat")) + threads
+                        selectedId = id
+                        pendingImage = null
+                        pendingTextFileContent = null
+                        status = ""
+                        scope.launch { drawerState.close() }
+                    }) { Text("＋", color = androidx.compose.ui.graphics.Color(0xFFD6B56D)) }
+                }
+                HorizontalDivider(color = androidx.compose.ui.graphics.Color.DarkGray)
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(threads, key = { it.id }) { thread ->
+                        NavigationDrawerItem(
+                            label = {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(thread.title, maxLines = 1)
+                                    Text(thread.messages.lastOrNull()?.content ?: if (isArabic) "محادثة جديدة" else "New conversation", maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                                }
+                            },
+                            selected = thread.id == selectedId,
+                            onClick = {
+                                selectedId = thread.id
+                                pendingImage = null
+                                pendingTextFileContent = null
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = androidx.compose.ui.graphics.Color(0xFF3A3020),
+                                selectedTextColor = androidx.compose.ui.graphics.Color(0xFFFFE3A0),
+                                unselectedTextColor = androidx.compose.ui.graphics.Color.White
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    ) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                    val id = nextId++
+                    threads = listOf(ChatThread(id, if (isArabic) "محادثة جديدة" else "New chat")) + threads
+                    selectedId = id
+                    pendingImage = null
+                    pendingTextFileContent = null
+                    status = ""
+                }) { Text("＋", color = androidx.compose.ui.graphics.Color(0xFFD6B56D)) }
+                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                    Text("☰", color = androidx.compose.ui.graphics.Color(0xFFD6B56D), style = MaterialTheme.typography.headlineSmall)
+                }
+            }
+            HorizontalDivider()
+            LazyColumn(
+                state = messageListState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (selected.messages.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("⚙", style = MaterialTheme.typography.displayMedium, color = androidx.compose.ui.graphics.Color(0xFFD6B56D))
+                                Text(if (isArabic) "ابدئي محادثة جديدة" else "Start a new conversation", style = MaterialTheme.typography.titleLarge)
+                                Text(if (isArabic) "اختاري نموذجًا واكتبي رسالتك بالأسفل" else "Choose a model and write below", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+                items(selected.messages) { msg ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.role == "user") Arrangement.End else Arrangement.Start) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(if (msg.role == "user") 0.88f else 0.98f),
+                            colors = CardDefaults.cardColors(containerColor = if (msg.role == "user") androidx.compose.ui.graphics.Color(0xFFF2E8D5) else androidx.compose.ui.graphics.Color(0xFFF7F7F7)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (msg.role == "user") (if (isArabic) "أنتِ" else "You") else if (msg.role == "tool") "Termux" else "AI",
+                                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+                                        color = androidx.compose.ui.graphics.Color(0xFF98722F))
+                                    TextButton(onClick = {
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("AI Universal Hub", msg.content))
+                                        Toast.makeText(context, if (isArabic) "تم نسخ النص" else "Text copied", Toast.LENGTH_SHORT).show()
+                                    }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                                        Text(if (isArabic) "نسخ" else "Copy", color = androidx.compose.ui.graphics.Color(0xFF98722F))
+                                    }
+                                }
+                                Text(msg.content, style = MaterialTheme.typography.bodyLarge, color = androidx.compose.ui.graphics.Color(0xFF211A1E))
+                            }
+                        }
+                    }
+                }
+                if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            }
+            if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            if (usageLabel.isNotBlank()) Text(usageLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            if (pendingImage != null) Text(if (isArabic) "صورة جاهزة للإرفاق" else "Image ready to attach", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+            if (pendingTextFileName != null) Text(if (isArabic) "ملف جاهز للإرفاق: $pendingTextFileName" else "File ready to attach: $pendingTextFileName", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = androidx.compose.ui.graphics.Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFD8D1C5)),
+                shadowElevation = 2.dp
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    IconButton(onClick = { textFilePicker.launch("*/*") }, enabled = !busy) {
+                        Text("📄", style = MaterialTheme.typography.headlineMedium)
+                    }
+                    IconButton(onClick = { imagePicker.launch("image/*") }, enabled = !busy) {
+                        Text("＋", color = androidx.compose.ui.graphics.Color(0xFF98722F), style = MaterialTheme.typography.headlineMedium)
+                    }
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text(if (isArabic) "اكتبي رسالتك..." else "Message AI...") },
+                        enabled = !busy,
+                        maxLines = 6,
+                        minLines = 1,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent
+                        )
+                    )
+                    IconButton(onClick = {
+                        try {
+                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (isArabic) "ar-EG" else "en-US")
+                                putExtra(RecognizerIntent.EXTRA_PROMPT, if (isArabic) "تحدثي الآن" else "Speak now")
+                            }
+                            speechInput.launch(intent)
+                        } catch (_: Exception) { status = if (isArabic) "الإملاء الصوتي غير متاح." else "Speech input unavailable." }
+                    }, enabled = !busy) { Text("🎙") }
+                    IconButton(onClick = { sendMessage() }, enabled = !busy && (draft.isNotBlank() || pendingImage != null || pendingTextFileContent != null)) {
+                        Text("➤", color = androidx.compose.ui.graphics.Color(0xFF98722F), style = MaterialTheme.typography.headlineSmall)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showLiveSearch) {
+        LiveSearchDialog(isArabic = isArabic, onDismiss = { showLiveSearch = false })
+    }
+    if (showTaskManager) {
+        BackgroundTaskDialog(
+            isArabic = isArabic,
+            providerId = providerStorageId(providerName, registeredProviders),
+            providerName = providerName,
+            model = selected.model,
+            onDismiss = { showTaskManager = false }
+        )
+    }
+
+    if (showSettings) {
+        AlertDialog(
+            onDismissRequest = { showSettings = false },
+            title = { Text(if (isArabic) "إعدادات مزود الذكاء الاصطناعي" else "AI provider settings") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    var showProviderNetworks by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = { showProviderNetworks = !showProviderNetworks }) {
+                        Text(if (isArabic) "◎ شبكات ومزوّدو الخدمات الخارجية" else "◎ External provider networks")
+                    }
+                    if (showProviderNetworks) {
+                        Text(if (isArabic)
+                            "اختاري مزودًا لفتح كتالوج موديلاته أو صفحة إنشاء مفتاح API. بعد إنشاء المفتاح، اختاري المزود من القائمة وأضيفي عنوانه ومفتاحه."
+                            else "Open a provider's model catalog or API-key page. After creating a key, select the provider and enter its endpoint and key.",
+                            style = MaterialTheme.typography.bodySmall)
+                        val networkProviders = listOf(
+                            Triple("OpenRouter", "https://openrouter.ai/api/v1", "https://openrouter.ai/models|https://openrouter.ai/settings/keys"),
+                            Triple("OpenAI", "https://api.openai.com/v1", "https://platform.openai.com/docs/models|https://platform.openai.com/api-keys"),
+                            Triple("Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "https://ai.google.dev/gemini-api/docs/models|https://aistudio.google.com/app/apikey"),
+                            Triple("Groq", "https://api.groq.com/openai/v1", "https://console.groq.com/docs/models|https://console.groq.com/keys"),
+                            Triple("DeepSeek", "https://api.deepseek.com/v1", "https://api-docs.deepseek.com/|https://platform.deepseek.com/api_keys"),
+                            Triple("Mistral AI", "https://api.mistral.ai/v1", "https://docs.mistral.ai/getting-started/models/|https://console.mistral.ai/api-keys/"),
+                            Triple("Together AI", "https://api.together.xyz/v1", "https://www.together.ai/models|https://api.together.ai/settings/api-keys"),
+                            Triple("AIMLAPI", "https://api.aimlapi.com/v1", "https://docs.aimlapi.com/|https://aimlapi.com/app/onboarding?returnTo=/keys?from=get-api-key")
+                        )
+                        networkProviders.forEach { entry ->
+                            val links = entry.third.split("|")
+                            Card {
+                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(entry.first, style = MaterialTheme.typography.titleSmall)
+                                    Text((if (isArabic) "عنوان API: " else "API: ") + entry.second,
+                                        style = MaterialTheme.typography.bodySmall)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        TextButton(onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(links[0])))
+                                        }) { Text(if (isArabic) "الموديلات" else "Models") }
+                                        TextButton(onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(links[1])))
+                                        }) { Text(if (isArabic) "مفتاح API" else "API key") }
+                                        TextButton(onClick = {
+                                            providerName = entry.first
+                                            baseUrl = entry.second
+                                            apiKey = ""
+                                        }) { Text(if (isArabic) "اختيار" else "Select") }
+                                    }
+                                }
+                            }
+                        }
+                        Text(if (isArabic)
+                            "تنبيه: وجود موديل في الكتالوج لا يعني أنه مجاني. تحققي من الأسعار والحدود قبل الاستخدام. مفتاح API مختلف عن اشتراك ChatGPT."
+                            else "A model appearing in a catalog does not mean it is free. Check pricing and limits. API keys are separate from ChatGPT subscriptions.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    var providerExpanded by remember { mutableStateOf(false) }
+                    ExposedDropdownMenuBox(expanded = providerExpanded, onExpandedChange = { providerExpanded = !providerExpanded }) {
+                        OutlinedTextField(providerName, {}, readOnly = true,
+                            label = { Text(if (isArabic) "المزود" else "Provider") },
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerExpanded) })
+                        ExposedDropdownMenu(expanded = providerExpanded, onDismissRequest = { providerExpanded = false }) {
+                            allProviderOptions.forEach { option ->
+                                DropdownMenuItem(text = { Text(option.first) }, onClick = {
+                                    providerName = option.first
+                                    val id = providerStorageId(option.first, registeredProviders)
+                                    baseUrl = store.getProviderUrl(id, option.second)
+                                    apiKey = store.getApiKey(id) ?: ""
+                                    modelOptions = store.getModels(id)
+                                    store.saveSelectedProvider(id)
+                                    providerExpanded = false
+                                    if (option.second.isNotBlank()) {
+                                        busy = true
+                                        scope.launch {
+                                            try {
+                                                val raw = withContext(Dispatchers.IO) {
+                                                    client.listModels(option.second, store.getApiKey(id).orEmpty())
+                                                }
+                                                val discovered = client.parseModelIds(raw)
+                                                store.saveModels(id, discovered)
+                                                if (providerName == option.first) {
+                                                    modelOptions = discovered
+                                                    if (discovered.isNotEmpty() && selected.model !in discovered) {
+                                                        updateSelectedModel(discovered.first())
+                                                    }
+                                                }
+                                                status = if (discovered.isEmpty())
+                                                    (if (isArabic) "لم يرجع المزود نماذج متاحة." else "Provider returned no models.")
+                                                else (if (isArabic) "تم اكتشاف ${discovered.size} نموذجًا من ${option.first}." else "Discovered ${discovered.size} models from ${option.first}.")
+                                            } catch (ex: Exception) {
+                                                status = ex.message ?: if (isArabic) "تعذر تحديث كتالوج المزود." else "Could not refresh provider catalog."
+                                            } finally { busy = false }
+                                        }
+                                    }
+                                })
+                            }
+                        }
+                    }
+                    if (registeredProviders.isNotEmpty()) {
+                        Text(if (isArabic) "المزودات المسجلة على الجهاز" else "Registered providers on this device",
+                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                        registeredProviders.forEach { saved ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(saved.name, modifier = Modifier.weight(1f),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f))
+                                TextButton(onClick = {
+                                    val replacement = store.deleteProvider(saved.id)
+                                    registeredProviders = store.listProviders()
+                                    if (providerName == saved.name) {
+                                        val next = registeredProviders.firstOrNull()
+                                        if (next != null) {
+                                            providerName = next.name
+                                            baseUrl = next.baseUrl
+                                            apiKey = store.getApiKey(next.id) ?: ""
+                                            store.saveSelectedProvider(next.id)
+                                        } else {
+                                            providerName = providerOptions.first().first
+                                            baseUrl = providerOptions.first().second
+                                            apiKey = ""
+                                            store.saveSelectedProvider("openai-compatible")
+                                        }
+                                        modelOptions = emptyList()
+                                    }
+                                    status = if (isArabic) "تم حذف المزود ورابطه ومفتاحه ونماذجه فقط." else "Provider, URL, key and its models deleted."
+                                }) { Text(if (isArabic) "حذف" else "Delete", color = MaterialTheme.colorScheme.error) }
+                            }
+                        }
+                    }
+                    OutlinedButton(onClick = { showAddProvider = true }) {
+                        Text(if (isArabic) "＋ إضافة مزود باسم جديد" else "＋ Add provider with custom name")
+                    }
+                    
+                    OutlinedButton(onClick = { jsonPicker.launch("application/json") }) {
+                        Text(if (isArabic) "＋ استيراد مزودين من ملف JSON" else "＋ Import providers from JSON")
+                    }
+
+                    OutlinedTextField(baseUrl, { baseUrl = it }, label = { Text("Base URL") }, singleLine = true)
+                    OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key (leave blank if not required)") },
+                        singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    Text(if (isArabic) "لا يلزم إدخال اسم النموذج هنا. حمّلي النماذج ثم اختاري نموذجًا لكل محادثة." else "No model name is required here. Refresh models and select one per conversation.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val keyId = providerStorageId(providerName, registeredProviders)
+                    store.saveProviderUrl(keyId, baseUrl.trim())
+                    if (apiKey.isNotBlank()) store.saveApiKey(keyId, apiKey.trim()) else store.deleteApiKey(keyId)
+                    store.saveSelectedProvider(keyId)
+                    showSettings = false
+                    status = if (isArabic) "تم حفظ رابط المزود والمفتاح على الجهاز. اضغطي تحديث النماذج لاختبار الاتصال." else "Provider settings saved. Refresh models to test the connection."
+                }) { Text(if (isArabic) "حفظ" else "Save") }
+            },
+            dismissButton = { TextButton(onClick = { showSettings = false }) { Text(if (isArabic) "إلغاء" else "Cancel") } }
+        )
+        if (showAddProvider) {
+            AlertDialog(
+                onDismissRequest = { showAddProvider = false },
+                title = { Text(if (isArabic) "إضافة مزود جديد" else "Add a new provider") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(newProviderName, { newProviderName = it },
+                            label = { Text(if (isArabic) "اسم المزود من اختيارك" else "Your provider name") }, singleLine = true)
+                        OutlinedTextField(newProviderUrl, { newProviderUrl = it },
+                            label = { Text("Base URL") }, singleLine = true)
+                        OutlinedTextField(newProviderKey, { newProviderKey = it },
+                            label = { Text("API key") }, singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val cleanName = newProviderName.trim()
+                        val cleanUrl = newProviderUrl.trim()
+                        val id = cleanName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                        if (cleanName.isBlank() || cleanUrl.isBlank() || id.isBlank()) {
+                            status = if (isArabic) "اكتبي اسم المزود ورابطه بشكل صحيح." else "Enter a valid provider name and URL."
+                        } else if (registeredProviders.any { it.id == id }) {
+                            status = if (isArabic) "الاسم ده مسجل بالفعل؛ اختاري اسمًا مختلفًا." else "That provider name is already registered; choose another."
+                        } else {
+                            store.saveProvider(id, cleanName, cleanUrl, newProviderKey)
+                            registeredProviders = store.listProviders()
+                            providerName = cleanName
+                            baseUrl = cleanUrl
+                            apiKey = newProviderKey
+                            store.saveSelectedProvider(id)
+                            modelOptions = emptyList()
+                            newProviderName = ""
+                            newProviderUrl = ""
+                            newProviderKey = ""
+                            showAddProvider = false
+                            status = if (isArabic) "تم حفظ المزود. جارٍ اختبار الاتصال واكتشاف النماذج..." else "Provider saved. Testing connection and discovering models..."
+                            busy = true
+                            scope.launch {
+                                try {
+                                    val raw = withContext(Dispatchers.IO) {
+                                        client.listModels(cleanUrl, apiKey)
+                                    }
+                                    val discovered = client.parseModelIds(raw)
+                                    store.saveModels(id, discovered)
+                                    if (providerStorageId(providerName, registeredProviders) == id) {
+                                        modelOptions = discovered
+                                        if (discovered.isNotEmpty()) updateSelectedModel(discovered.first())
+                                    }
+                                    status = if (discovered.isEmpty())
+                                        (if (isArabic) "اتصل المزود لكن لم يُرجع نماذج في صيغة متوافقة." else "Provider connected but returned no compatible models.")
+                                    else (if (isArabic) "تم اكتشاف وحفظ ${discovered.size} نموذجًا من $cleanName." else "Discovered and saved ${discovered.size} models from $cleanName.")
+                                } catch (ex: Exception) {
+                                    status = ex.message ?: if (isArabic) "فشل اختبار اتصال المزود. راجعي الرابط والمفتاح." else "Provider connection test failed. Check URL and API key."
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        }
+                    }) { Text(if (isArabic) "إضافة وحفظ" else "Add and save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddProvider = false }) { Text(if (isArabic) "إلغاء" else "Cancel") }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveSearchDialog(isArabic: Boolean, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val secure = remember { SecureStore(context) }
+    val searchClient = remember { LiveSearchClient() }
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var key by remember { mutableStateOf(secure.getApiKey("live-search-brave").orEmpty()) }
+    var results by remember { mutableStateOf(emptyList<com.aiuniversalhub.net.SearchHit>()) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isArabic) "البحث الحي على الويب" else "Live web search") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isArabic) "ابحثي في المواقع" else "Search the web") })
+                OutlinedTextField(key, { key = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Brave Search API key") }, singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                Text(if (isArabic) "المفتاح يُحفظ مشفرًا على الجهاز. يلزم حساب Brave Search API؛ لا يوجد بحث مجاني مضمون." else "The key is encrypted on-device. A Brave Search API account is required; free availability is not guaranteed.",
+                    style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        if (key.isBlank()) secure.deleteApiKey("live-search-brave")
+                        else secure.saveApiKey("live-search-brave", key.trim())
+                        error = if (isArabic) "تم حفظ إعدادات البحث." else "Search settings saved."
+                    }) { Text(if (isArabic) "حفظ المفتاح" else "Save key") }
+                    Button(enabled = !loading && query.isNotBlank() && key.isNotBlank(), onClick = {
+                        secure.saveApiKey("live-search-brave", key.trim())
+                        loading = true
+                        error = ""
+                        scope.launch {
+                            try {
+                                results = withContext(Dispatchers.IO) { searchClient.search(query, key) }
+                                if (results.isEmpty()) error = if (isArabic) "لم تظهر نتائج." else "No results found."
+                            } catch (ex: Exception) { error = ex.message ?: "Search failed" }
+                            loading = false
+                        }
+                    }) { Text(if (loading) (if (isArabic) "جاري البحث…" else "Searching…") else (if (isArabic) "بحث" else "Search")) }
+                }
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+                results.forEach { hit ->
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        TextButton(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(hit.url)))
+                        }) { Text(hit.title, maxLines = 2) }
+                        Text(hit.description, style = MaterialTheme.typography.bodySmall, maxLines = 3)
+                        Text(hit.url, style = MaterialTheme.typography.labelSmall)
+                    }
+                    HorizontalDivider()
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(if (isArabic) "إغلاق" else "Close") } }
+    )
+}
+
+@Composable
+private fun BackgroundTaskDialog(
+    isArabic: Boolean,
+    providerId: String,
+    providerName: String,
+    model: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var title by remember { mutableStateOf("") }
+    var prompt by remember { mutableStateOf("") }
+    var tasks by remember { mutableStateOf(TaskRecordStore(context).all()) }
+    var error by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isArabic) "المهام الخلفية" else "Background tasks") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (isArabic) "المزوّد الحالي: $providerName • النموذج: $model" else "Provider: $providerName • Model: $model",
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(title, { title = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isArabic) "عنوان المهمة" else "Task title") }, singleLine = true)
+                OutlinedTextField(prompt, { prompt = it }, modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (isArabic) "تعليمات المهمة" else "Task instructions") }, minLines = 3)
+                Button(enabled = title.isNotBlank() && prompt.isNotBlank() && model.isNotBlank(), onClick = {
+                    try {
+                        TaskScheduler.enqueue(context, title, prompt, providerId, model)
+                        tasks = TaskRecordStore(context).all()
+                        title = ""; prompt = ""
+                        error = if (isArabic) "تمت جدولة المهمة؛ ستعمل عند توفر الإنترنت." else "Task queued; it will run when network is available."
+                    } catch (ex: Exception) { error = ex.message ?: "Could not queue task." }
+                }) { Text(if (isArabic) "جدولة المهمة" else "Queue task") }
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.secondary)
+                HorizontalDivider()
+                Text(if (isArabic) "سجل المهام" else "Task history", style = MaterialTheme.typography.titleSmall)
+                tasks.take(8).forEach { task ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(task.title, style = MaterialTheme.typography.labelLarge)
+                        Text("${task.state} • ${task.progress}%", style = MaterialTheme.typography.labelSmall)
+                        Text(task.detail, style = MaterialTheme.typography.bodySmall, maxLines = 4)
+                    }
+                    HorizontalDivider()
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { tasks = TaskRecordStore(context).all() }) { Text(if (isArabic) "تحديث السجل" else "Refresh") }
+            TextButton(onClick = onDismiss) { Text(if (isArabic) "إغلاق" else "Close") }
+        }
+    )
+}

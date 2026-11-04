@@ -379,25 +379,25 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         
         if (prompt.isBlank() && imageUri == null && fileContent == null) return
         if (selected.model.isBlank()) {
-            status = if (isArabic) "اختاري نموذج المحادثة من القائمة أولًا، ثم أرسلي الرسالة." else "Select a conversation model before sending."
+            status = if (isArabic) "اختاري نموذج المحادثة أولاً." else "Select a conversation model first."
             return
         }
         
         if (fileContent != null) {
-            prompt = "محتوى الملف المرفق ($fileName):\n```\n$fileContent\n```\n\n" + prompt
+            prompt = "الملف المرفق ($fileName):\n$fileContent\n\n" + prompt
         }
         
         var userText = prompt
         if (imageUri != null) {
             val prefix = if (prompt.isBlank()) "" else "\n"
-            val imgLabel = if (isArabic) "📎 صورة مرفقة" else "📎 Image attached"
+            val imgLabel = if (isArabic) "📎 صورة" else "📎 Image"
             userText = prompt + prefix + imgLabel
         }
         
         val thread = threads.first { it.id == selectedId }
         var newTitle = thread.title
         
-        // هذا الجزء تمت إعادة كتابته بأبسط صورة ممكنة لضمان عدم حدوث أي خطأ
-        if (thread.messages.isEmpty()) {
-            if (prompt.isNotBlank()) {
-            
+        val isFirst = thread.messages.isEmpty()
+        if (isFirst) {
+            val rawTitle = if (prompt.isNotBlank()) prompt else (if (isArabic) "تحليل ملف/صورة" else "File/Image question")
+            newTitle = if (rawTitle.length 

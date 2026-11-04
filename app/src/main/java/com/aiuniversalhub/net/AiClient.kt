@@ -43,7 +43,7 @@ class AiClient {
         }
     }
 
-    fun parseModelIds(raw: String): List<String> {
+        fun parseModelIds(raw: String): List<String> {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return emptyList()
         val data = try {
@@ -58,6 +58,25 @@ class AiClient {
                         ?: JSONArray()
                 }
             }
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        return (0 until data.length()).mapNotNull { index ->
+            val item = data.optJSONObject(index) ?: return@mapNotNull null
+            val rawId = listOf("id", "name", "model").firstNotNullOfOrNull { field ->
+                item.optString(field).takeIf { it.isNotBlank() && it != "null" }
+            } ?: return@mapNotNull null
+            
+            // تنظيف الاسم: إزالة كلمة models/ من البداية إن وجدت
+            var cleanId = rawId
+            if (cleanId.startsWith("models/")) {
+                cleanId = cleanId.removePrefix("models/")
+            }
+            
+            // إخفاء الأسماء الفارغة التي لا تحتوي على حروف
+            cleanId.takeIf { it.isNotBlank() && it != "/" }
+        }.distinct().sorted()
+    }
         } catch (_: Exception) {
             return emptyList()
         }

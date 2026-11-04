@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit
 data class TokenUsage(val promptTokens: Int?, val completionTokens: Int?, val totalTokens: Int?)
 
 class AiClient {
+    // العميل الرئيسي للمحادثات (مهلة طويلة)
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -18,11 +19,11 @@ class AiClient {
         .callTimeout(150, TimeUnit.SECONDS)
         .build()
 
-    // عميل سريع جداً مخصص لفحص المنافذ (ثانيتين فقط)
+    // عميل سريع مخصص لفحص المنافذ (مهلة 3 ثوانٍ فقط)
     private val scanHttp = OkHttpClient.Builder()
-        .connectTimeout(2, TimeUnit.SECONDS)
-        .readTimeout(2, TimeUnit.SECONDS)
-        .callTimeout(3, TimeUnit.SECONDS)
+        .connectTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(3, TimeUnit.SECONDS)
+        .callTimeout(4, TimeUnit.SECONDS)
         .build()
 
     private fun endpoint(baseUrl: String, path: String): String {
@@ -50,7 +51,7 @@ class AiClient {
         }
     }
 
-    // دالة الفحص السريع (ترجع true إذا كانت الأداة تعمل)
+    // دالة الفحص السريع (للبحث التلقائي عن الأدوات)
     fun quickScan(baseUrl: String): Boolean {
         return try {
             val req = requestBuilder(baseUrl, "", "/models").get().build()
@@ -214,3 +215,4 @@ class AiClient {
         return "Provider HTTP $code" + if (detail.isNotBlank()) ": ${detail.take(240)}" else ""
     }
 }
+// END OF FILE

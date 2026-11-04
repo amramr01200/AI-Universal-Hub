@@ -287,18 +287,20 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         AlertDialog(
             onDismissRequest = { pendingApproval = null },
             title = { Text(if (isArabic) "تأكيد تنفيذ الأمر" else "Confirm command execution") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (isArabic) "راجعي الأمر قبل الموافقة:" else "Review the command before approval:")
-                Text(selected.installCommand)
-                Text(if (isArabic) "سينفذ داخل Termux بصلاحياته." else "It will execute inside Termux with its own permissions.")
-            } },
-            confirmButton = { TextButton(onClick = {
-                pendingApproval = null
-                runningComponent = selected.id
-                val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id, activeConversationId)
-                status = result.message
-                audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
-                runningComponent = null
-            }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } },
-            dismissButton = { TextButton(onClick = {
-                audit.record("termux_command", 
+            text = { 
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (isArabic) "راجعي الأمر قبل الموافقة:" else "Review the command before approval:")
+                    Text(selected.installCommand)
+                    Text(if (isArabic) "سينفذ داخل Termux بصلاحياته." else "It will execute inside Termux with its own permissions.")
+                } 
+            },
+            confirmButton = { 
+                TextButton(onClick = {
+                    pendingApproval = null
+                    runningComponent = selected.id
+                    val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id, activeConversationId)
+                    status = result.message
+                    audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
+                    runningComponent = null
+                }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } 
+           

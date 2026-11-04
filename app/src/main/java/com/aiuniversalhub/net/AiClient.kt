@@ -43,7 +43,7 @@ class AiClient {
         }
     }
 
-        fun parseModelIds(raw: String): List<String> {
+    fun parseModelIds(raw: String): List<String> {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return emptyList()
         val data = try {
@@ -67,24 +67,12 @@ class AiClient {
                 item.optString(field).takeIf { it.isNotBlank() && it != "null" }
             } ?: return@mapNotNull null
             
-            // تنظيف الاسم: إزالة كلمة models/ من البداية إن وجدت
             var cleanId = rawId
             if (cleanId.startsWith("models/")) {
                 cleanId = cleanId.removePrefix("models/")
             }
             
-            // إخفاء الأسماء الفارغة التي لا تحتوي على حروف
             cleanId.takeIf { it.isNotBlank() && it != "/" }
-        }.distinct().sorted()
-    }
-        } catch (_: Exception) {
-            return emptyList()
-        }
-        return (0 until data.length()).mapNotNull { index ->
-            val item = data.optJSONObject(index) ?: return@mapNotNull null
-            listOf("id", "name", "model").firstNotNullOfOrNull { field ->
-                item.optString(field).takeIf { it.isNotBlank() && it != "null" }
-            }
         }.distinct().sorted()
     }
 
@@ -127,7 +115,7 @@ class AiClient {
     }
 
     fun parseUsage(raw: String): TokenUsage {
-        val usage = JSONObject(raw).optJSONObject("usage") ?: return TokenUsage(null, null, null)
+        val usage = try { JSONObject(raw).optJSONObject("usage") } catch (_: Exception) { null } ?: return TokenUsage(null, null, null)
         fun value(vararg keys: String): Int? {
             keys.forEach { key ->
                 if (usage.has(key) && !usage.isNull(key)) return usage.optInt(key).takeIf { it >= 0 }

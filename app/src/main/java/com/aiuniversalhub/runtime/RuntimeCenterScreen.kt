@@ -64,7 +64,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
             bridgeMeta = "Chat #" + prefs.getInt("conversation_id", -1) + " • Exit: " + prefs.getInt("exit_code", -1) + " • " + prefs.getString("label", "")
             val internalError = prefs.getString("error_message", "").orEmpty()
             if (internalError.isNotBlank()) bridgeError = internalError + "\n" + bridgeError
-        } catch (e: Exception) { bridgeMeta = e.message ?: "Could not read result" }
+        } catch (ex: Exception) { bridgeMeta = ex.message ?: "Could not read result" }
     }
 
     fun runDiagnostic(id: String) {
@@ -303,4 +303,4 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                     audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
                     runningComponent = null
                 }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } 
-           
+         

@@ -17,6 +17,8 @@ import androidx.security.crypto.MasterKey
 import com.aiuniversalhub.data.SecureStore
 import com.aiuniversalhub.net.AiClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -73,42 +75,61 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         }
     }
 
-    // دالة البحث مع طباعة الأخطاء الدقيقة
+    // دالة البحث الشامل والمتوازي (تفحص كل الأدوات مرة واحدة)
     fun scanAndAutoAddTools() {
         isScanning = true
-        status = if (isArabic) "جاري البحث المتوازي..." else "Parallel scanning..."
+        status = if (isArabic) "جاري المسح الشامل لجميع الأدوات..." else "Comprehensive scan for all tools..."
         scope.launch {
             val found = mutableListOf<Triple<String, String, String>>()
-            val errors = mutableListOf<String>()
-            val knownPorts = mapOf(
+            
+            // قائمة الأدوات والمنافذ الخاصة بها (تشمل الأدوات التي طلبتها)
+            val knownTools = mapOf(
                 "Ollama" to "http://127.0.0.1:11434/v1",
-                "LM Studio" to "http://127.0.0.1:1234/v1"
+                "LM Studio" to "http://127.0.0.1:1234/v1",
+                "FreeLLMAPI" to "http://127.0.0.1:3001/v1",
+                "OmniRoute" to "http://127.0.0.1:20128/v1",
+                "Hermes Agent" to "http://127.0.0.1:8642/v1",
+                "OpenCode (Local)" to "http://127.0.0.1:4010/v1",
+                "LocalAI" to "http://127.0.0.1:8080/v1",
+                "Jan.ai" to "http://127.0.0.1:1337/v1",
+                "Text Gen WebUI" to "http://127.0.0.1:5000/v1",
+                "Custom Python API" to "http://127.0.0.1:8000/v1"
             )
             
+            // مسح متوازي (في نفس الوقت) لتوفير الوقت ومنع التعليق
             withContext(Dispatchers.IO) {
-                knownPorts.forEach { (name, url) ->
-                    try {
-                        val raw = aiClient.listModels(url, "")
-                        if (raw.isNotBlank()) {
-                            found.add(Triple(name, url, "local-" + name.lowercase().replace(" ", "-")))
-                        }
-                    } catch (e: Exception) {
-                        // حفظ رسالة الخطأ لنعرف السبب
-                        errors.add("$name: ${e.message ?: "خطأ غير معروف"}")
+                val deferreds = knownTools.map { (name, url) ->
+                    async {
+                        try {
+                            if (aiClient.quickScan(url)) {
+                                val id = "local-" + name.lowercase().replace(" ", "-")
+                                Triple(name, url, id)
+                            } else null
+                        } catch (e: Exception) { null }
                     }
                 }
+                val results = deferreds.awaitAll().filterNotNull()
+                found.addAll(results)
             }
             
             if (found.isNotEmpty()) {
                 withContext(Dispatchers.IO) {
                     found.forEach { (name, url, id) ->
                         secureStore.saveProvider(id, name, url, "")
+                        
+                        // أوامر التشغيل الافتراضية لكل أداة (لكي يعمل التشغيل التلقائي)
                         val defaultCmd = when(name) {
                             "Ollama" -> "ollama serve &"
                             "LM Studio" -> "lms server start &"
+                            "FreeLLMAPI" -> "cd ~/freellmapi && npm run dev &"
+                            "OmniRoute" -> "npx -y omniroute &"
+                            "Hermes Agent" -> "hermes gateway &"
+                            "OpenCode (Local)" -> "opencode-llm-proxy &"
                             else -> ""
                         }
                         if (defaultCmd.isNotBlank()) secureStore.saveProviderStartCommand(id, defaultCmd)
+                        
+                        // جلب النماذج وحفظها
                         try {
                             val raw = aiClient.listModels(url, "")
                             val models = aiClient.parseModelIds(raw)
@@ -121,9 +142,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 }
             } else {
                 withContext(Dispatchers.Main) {
-                    // طباعة الأخطاء على الشاشة
-                    val errorMsg = if (errors.isNotEmpty()) errors.joinToString(" | ") else "لم يتم العثور على أي منفذ مفتوح."
-                    status = if (isArabic) "فشل الاتصال. الأخطاء: $errorMsg" else "Connection failed. Errors: $errorMsg"
+                    status = if (isArabic) "لم يتم العثور على أدوات. تأكدي من تشغيلها في Termux." else "No tools found. Make sure they are running in Termux."
                 }
             }
             isScanning = false
@@ -139,15 +158,15 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (isArabic) "البحث التلقائي الشامل" else "Comprehensive Auto-Scan", style = MaterialTheme.typography.titleMedium)
-                    Text(if (isArabic) "سيقوم التطبيق بفحص جميع المنافذ الشائعة، وإضافة الأدوات، وحفظ نماذجها تلقائياً." else "The app will scan all common ports, add tools, and save models automatically.", style = MaterialTheme.typography.bodySmall)
+                    Text(if (isArabic) "البحث التلقائي الشامل (كل الأدوات)" else "Comprehensive Auto-Scan (All Tools)", style = MaterialTheme.typography.titleMedium)
+                    Text(if (isArabic) "سيقوم التطبيق بفحص 10 منافذ شائعة في وقت واحد، وإضافة جميع الأدوات ونماذجها تلقائياً." else "The app will scan 10 common ports simultaneously, adding all tools and models automatically.", style = MaterialTheme.typography.bodySmall)
                     
                     Button(
                         enabled = !isScanning && termuxInstalled, 
                         onClick = { scanAndAutoAddTools() },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (isScanning) (if (isArabic) "جاري البحث والإضافة..." else "Scanning & Adding...") else (if (isArabic) "بحث وإضافة تلقائية للجميع" else "Auto-Scan & Add All"))
+                        Text(if (isScanning) (if (isArabic) "جاري المسح المتوازي..." else "Parallel scanning...") else (if (isArabic) "بحث وإضافة تلقائية للجميع" else "Auto-Scan & Add All"))
                     }
                 }
             }

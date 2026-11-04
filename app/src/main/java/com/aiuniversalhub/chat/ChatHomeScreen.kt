@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.aiuniversalhub.data.SecureStore
+import com.aiuniversalhub.data.ToolAnalyzer
 import com.aiuniversalhub.net.AiClient
 import com.aiuniversalhub.net.LiveSearchClient
 import com.aiuniversalhub.runtime.TermuxBridgeAdapter
@@ -204,6 +205,41 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         }
     }
 
+    // منتقي الملفات لاستيراد JSON
+    val jsonPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            busy = true
+            status = if (isArabic) "جاري قراءة ملف JSON واستيراد المزودين..." else "Reading JSON file and importing providers..."
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    if (content != null) {
+                        val result = ToolAnalyzer.parseProvidersJson(content)
+                        result.onSuccess { providers ->
+                            providers.forEach { p ->
+                                val id = p.name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                                store.saveProvider(id, p.name, p.baseUrl, p.apiKey)
+                                if (p.models.isNotEmpty()) {
+                                    store.saveModels(id, p.models)
+                                }
+                            }
+                            withContext(Dispatchers.Main) {
+                                registeredProviders = store.listProviders()
+                                status = if (isArabic) "تم استيراد ${providers.size} مزود بنجاح!" else "Imported ${providers.size} providers successfully!"
+                            }
+                        }.onFailure { e ->
+                            withContext(Dispatchers.Main) { status = "خطأ: ${e.message}" }
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) { status = "فشل قراءة الملف: ${e.message}" }
+                } finally {
+                    withContext(Dispatchers.Main) { busy = false }
+                }
+            }
+        }
+    }
+
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         pendingImage = uri
         if (uri != null) status = if (isArabic) "تم إرفاق الصورة. اكتبي رسالتك ثم اضغطي إرسال." else "Image attached. Add a message and press Send."
@@ -337,15 +373,13 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                 val sendBaseUrl = option?.baseUrl ?: baseUrl
                 val sendApiKey = option?.apiKey ?: apiKey
                 
-                // --- التشغيل التلقائي في الخلفية ---
                 val startCommand = option?.providerId?.let { store.getProviderStartCommand(it) } ?: ""
                 if (startCommand.isNotBlank()) {
                     status = if (isArabic) "جاري تشغيل الأداة المحلية في الخلفية..." else "Starting local tool in background..."
                     TermuxBridgeAdapter.sendCustomApprovedCommand(context, startCommand, "auto-start", selectedId)
-                    delay(3000) // الانتظار 3 ثوانٍ حتى يفتح المنفذ
+                    delay(3000)
                     status = ""
                 }
-                // ---------------------------------
 
                 val response = withContext(Dispatchers.IO) {
                     if (imageUri != null) {
@@ -354,34 +388,4 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                         require(bytes.size <= 12 * 1024 * 1024) {
                             if (isArabic) "حجم الصورة أكبر من 12 ميجابايت." else "Image is larger than 12 MB."
                         }
-                        val mime = context.contentResolver.getType(imageUri) ?: "image/jpeg"
-                        client.chatWithImageHistory(sendBaseUrl, sendApiKey, selected.model, updated.messages.dropLast(1).map { it.role to it.content }, prompt, mime, Base64.encodeToString(bytes, Base64.NO_WRAP))
-                    } else {
-                        val history = updated.messages.map { it.role to it.content }
-                        client.chatWithHistory(sendBaseUrl, sendApiKey, selected.model, history)
-                    }
-                }
-                val usage = client.parseUsage(response)
-                usageLabel = if (usage.totalTokens != null) {
-                    (if (isArabic) "استهلاك آخر طلب: " else "Last request: ") + usage.totalTokens + (if (isArabic) " توكن" else " tokens")
-                } else {
-                    if (isArabic) "استهلاك التوكن من المزود غير متاح" else "Provider token usage unavailable"
-                }
-                val answer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)
-                    ?.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() } ?: response
-                threads = threads.map { t ->
-                    if (t.id == targetThreadId) t.copy(messages = t.messages + ChatMessage("assistant", answer)) else t
-                }
-                status = ""
-            } catch (e: Exception) {
-                status = e.message ?: if (isArabic) "فشل الاتصال بالمزود." else "Provider request failed."
-            } finally {
-                busy = false
-            }
-        }
-    }
-
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val messageListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    LaunchedEffect(selected.id, selected.messages.size, busy) {
-        if (selected.
+                        val mime = context.contentResolv

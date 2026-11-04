@@ -17,6 +17,8 @@ import androidx.security.crypto.MasterKey
 import com.aiuniversalhub.data.SecureStore
 import com.aiuniversalhub.net.AiClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -73,12 +75,11 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         }
     }
 
-    // الدالة الجديدة: بحث سريع، إضافة تلقائية، وحفظ النماذج بدون أي نوافذ
+    // دالة البحث المتوازي السريع
     fun scanAndAutoAddTools() {
         isScanning = true
-        status = if (isArabic) "جاري البحث السريع والإضافة التلقائية..." else "Fast scanning and auto-adding..."
+        status = if (isArabic) "جاري البحث المتوازي في جميع المنافذ..." else "Parallel scanning all ports..."
         scope.launch {
-            val found = mutableListOf<Triple<String, String, String>>()
             val knownPorts = mapOf(
                 "Ollama" to "http://127.0.0.1:11434/v1",
                 "LM Studio" to "http://127.0.0.1:1234/v1",
@@ -88,34 +89,32 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 "Generic Python API" to "http://127.0.0.1:8000/v1"
             )
             
-            // 1. الفحص السريع المتوازي
-            withContext(Dispatchers.IO) {
-                knownPorts.forEach { (name, url) ->
-                    if (aiClient.quickScan(url)) {
-                        val id = "local-" + name.lowercase().replace(" ", "-")
-                        found.add(Triple(name, url, id))
+            // فحص متوازي باستخدام async
+            val deferreds = knownPorts.map { (name, url) ->
+                async(Dispatchers.IO) {
+                    try {
+                        val raw = aiClient.listModels(url, "")
+                        if (raw.isNotBlank()) {
+                            Triple(name, url, "local-" + name.lowercase().replace(" ", "-"))
+                        } else null
+                    } catch (e: Exception) {
+                        null
                     }
                 }
             }
             
-            // 2. الإضافة والحفظ التلقائي
+            val found = deferreds.awaitAll().filterNotNull()
+            
             if (found.isNotEmpty()) {
                 withContext(Dispatchers.IO) {
                     found.forEach { (name, url, id) ->
-                        // حفظ المزود
                         secureStore.saveProvider(id, name, url, "")
-                        
-                        // تعيين أمر التشغيل الافتراضي للأداة
                         val defaultCmd = when(name) {
                             "Ollama" -> "ollama serve &"
                             "LM Studio" -> "lms server start &"
                             else -> ""
                         }
-                        if (defaultCmd.isNotBlank()) {
-                            secureStore.saveProviderStartCommand(id, defaultCmd)
-                        }
-                        
-                        // جلب النماذج وحفظها
+                        if (defaultCmd.isNotBlank()) secureStore.saveProviderStartCommand(id, defaultCmd)
                         try {
                             val raw = aiClient.listModels(url, "")
                             val models = aiClient.parseModelIds(raw)
@@ -123,16 +122,14 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                         } catch (_: Exception) {}
                     }
                 }
-                
                 withContext(Dispatchers.Main) {
-                    status = if (isArabic) "تمت إضافة وحفظ ${found.size} أداة ونماذجها بنجاح!" else "Successfully added and saved ${found.size} tools and their models!"
+                    status = if (isArabic) "تمت إضافة ${found.size} أداة ونماذجها بنجاح!" else "Added ${found.size} tools and models successfully!"
                 }
             } else {
                 withContext(Dispatchers.Main) {
-                    status = if (isArabic) "لم يتم العثور على أدوات تعمل حالياً. تأكدي من تشغيل الأداة." else "No running tools found. Make sure a tool is running."
+                    status = if (isArabic) "لم يتم العثور على أدوات. تأكدي من تشغيل Ollama في Termux." else "No tools found. Make sure Ollama is running."
                 }
             }
-            
             isScanning = false
         }
     }

@@ -52,6 +52,7 @@ class SecureStore(context: Context) {
             .remove("api_key_$providerId")
             .remove("selected_model_$providerId")
             .remove("models_$providerId")
+            .remove("provider_start_cmd_$providerId") // تنظيف أمر التشغيل عند الحذف
         if (wasSelected) {
             val replacement = ids.firstOrNull()
             if (replacement == null) editor.remove("selected_provider")
@@ -133,4 +134,12 @@ class SecureStore(context: Context) {
 
     fun getSelectedModel(providerId: String): String =
         prefs.getString("selected_model_$providerId", "") ?: ""
+
+    // --- الدوال الجديدة التي أضفناها للتشغيل التلقائي ---
+    fun saveProviderStartCommand(providerId: String, command: String) {
+        prefs.edit().putString("provider_start_cmd_$providerId", command.trim()).apply()
+    }
+
+    fun getProviderStartCommand(providerId: String): String =
+        prefs.getString("provider_start_cmd_$providerId", "") ?: ""
 }

@@ -18,6 +18,13 @@ class AiClient {
         .callTimeout(150, TimeUnit.SECONDS)
         .build()
 
+    // عميل سريع جداً مخصص لفحص المنافذ (ثانيتين فقط)
+    private val scanHttp = OkHttpClient.Builder()
+        .connectTimeout(2, TimeUnit.SECONDS)
+        .readTimeout(2, TimeUnit.SECONDS)
+        .callTimeout(3, TimeUnit.SECONDS)
+        .build()
+
     private fun endpoint(baseUrl: String, path: String): String {
         val normalized = baseUrl.trim().trimEnd('/')
         require(normalized.startsWith("https://") || normalized.startsWith("http://")) {
@@ -40,6 +47,18 @@ class AiClient {
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) error(providerError(response.code, body))
             return body.ifBlank { "{}" }
+        }
+    }
+
+    // دالة الفحص السريع (ترجع true إذا كانت الأداة تعمل)
+    fun quickScan(baseUrl: String): Boolean {
+        return try {
+            val req = requestBuilder(baseUrl, "", "/models").get().build()
+            scanHttp.newCall(req).execute().use { response ->
+                response.isSuccessful
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 

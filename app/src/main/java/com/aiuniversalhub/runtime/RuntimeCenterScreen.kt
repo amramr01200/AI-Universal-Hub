@@ -233,7 +233,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
             title = { Text(if (isArabic) "تم العثور على أدوات محلية!" else "Local tools found!") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (isArabic) "هل توافقين على إضافة هذه الأدوات؟ اكتبي أمر التشغيل لكل أداة (مثل ollama serve &)." else "Do you approve adding these tools? Enter the start command for each (e.g., ollama serve &).")
+                    Text(if (isArabic) "هل توافقين على إضافة هذه الأدوات؟ اكتبي أمر التشغيل لكل أداة." else "Do you approve adding these tools? Enter the start command for each.")
                     discoveredTools.forEach { (name, url, id) ->
                         Card {
                             Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -244,7 +244,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                                     onValueChange = { newCmd ->
                                         startCommands = startCommands.toMutableMap().apply { put(id, newCmd) }
                                     },
-                                    label = { Text(if (isArabic) "أمر التشغيل (Start Command)" else "Start Command") },
+                                    label = { Text(if (isArabic) "أمر التشغيل" else "Start Command") },
                                     placeholder = { Text("ollama serve &") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
@@ -300,4 +300,5 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
                 runningComponent = null
             }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } },
-            dismissButton = { TextButton
+            dismissButton = { TextButton(onClick = {
+                audit.record("termux_command", 

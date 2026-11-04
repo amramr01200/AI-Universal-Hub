@@ -14,11 +14,20 @@ import androidx.compose.ui.unit.dp
 import java.util.UUID
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.aiuniversalhub.data.SecureStore
+import com.aiuniversalhub.net.AiClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     val context = LocalContext.current
     val store = remember { TermuxAgentStore(context) }
+    val secureStore = remember { SecureStore(context) }
+    val aiClient = remember { AiClient() }
+    val scope = rememberCoroutineScope()
+
     var profiles by remember { mutableStateOf(store.list()) }
     var profileName by remember { mutableStateOf("") }
     var conversationId by remember { mutableStateOf("") }
@@ -27,6 +36,12 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     var termuxInstalled by remember { mutableStateOf(TermuxBridgeAdapter.isInstalled(context)) }
     var runCommandGranted by remember { mutableStateOf(TermuxBridgeAdapter.canRunCommands(context)) }
     var status by remember { mutableStateOf("") }
+    
+    // متغيرات البحث التلقائي
+    var isScanning by remember { mutableStateOf(false) }
+    var showScanDialog by remember { mutableStateOf(false) }
+    var discoveredTools by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) } // Name, URL, ID
+
     val runCommandPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         runCommandGranted = granted
         status = if (granted) (if (isArabic) "تم منح إذن تشغيل الأوامر." else "RUN_COMMAND permission granted.") else (if (isArabic) "لم يُمنح الإذن. افتحي إعدادات التطبيق وامنحي إذن RUN_COMMAND." else "Permission was not granted. Open app settings and grant RUN_COMMAND.")
@@ -37,6 +52,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     var bridgeOutput by remember { mutableStateOf("") }
     var bridgeError by remember { mutableStateOf("") }
     var bridgeMeta by remember { mutableStateOf("") }
+
     fun refreshBridgeResult() {
         try {
             val key = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
@@ -50,10 +66,48 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
             if (internalError.isNotBlank()) bridgeError = internalError + "\n" + bridgeError
         } catch (e: Exception) { bridgeMeta = e.message ?: "Could not read result" }
     }
+
     fun runDiagnostic(id: String) {
         val result = TermuxBridgeAdapter.sendDiagnostic(context, id, activeConversationId)
         status = result.message
         if (result.submitted) status = if (isArabic) "تم إرسال طلب الفحص؛ اضغطي تحديث النتائج بعد لحظات." else result.message
+    }
+
+    // دالة البحث التلقائي عن الأدوات المحلية
+    fun scanLocalTools() {
+        isScanning = true
+        status = if (isArabic) "جاري البحث عن أدوات محلية تعمل في الخلفية..." else "Scanning for local tools in background..."
+        scope.launch {
+            val found = mutableListOf<Triple<String, String, String>>()
+            // المنافذ الشائعة لأدوات الذكاء الاصطناعي
+            val knownPorts = mapOf(
+                "Ollama" to "http://127.0.0.1:11434/v1",
+                "LM Studio" to "http://127.0.0.1:1234/v1",
+                "LocalAI" to "http://127.0.0.1:8080/v1",
+                "Jan.ai" to "http://127.0.0.1:1337/v1"
+            )
+            withContext(Dispatchers.IO) {
+                knownPorts.forEach { (name, url) ->
+                    try {
+                        // محاولة الاتصال بدون مفتاح API (لأنها محلية)
+                        val raw = aiClient.listModels(url, "")
+                        if (raw.isNotBlank()) {
+                            val id = "local-" + name.lowercase().replace(" ", "-")
+                            found.add(Triple(name, url, id))
+                        }
+                    } catch (_: Exception) {
+                        // تجاهل الخطأ إذا كان المنفذ مغلقاً
+                    }
+                }
+            }
+            isScanning = false
+            if (found.isNotEmpty()) {
+                discoveredTools = found
+                showScanDialog = true
+            } else {
+                status = if (isArabic) "لم يتم العثور على أدوات تعمل حالياً. تأكدي من تشغيل Ollama أو غيرها في Termux." else "No running tools found. Make sure Ollama or others are running in Termux."
+            }
+        }
     }
 
     LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -61,6 +115,24 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
             Text(if (isArabic) "بيئة التشغيل والحزم" else "Runtime & Packages", style = MaterialTheme.typography.headlineSmall)
             Text(if (isArabic) "إدارة ملفات ربط الوكلاء بالمحادثات. حفظ الربط لا يعني أن Termux متصل ثنائي الاتجاه؛ يلزم إعداد الجسر على الجهاز." else "Manage agent profiles linked to chat IDs. Saving a profile does not create a live two-way Termux connection; the device bridge must also be configured.")
         }
+        
+        // قسم البحث التلقائي الجديد
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (isArabic) "البحث التلقائي عن أدوات Termux" else "Auto-Discover Termux Tools", style = MaterialTheme.typography.titleMedium)
+                    Text(if (isArabic) "سيقوم التطبيق بالبحث في المنافذ الشائعة (مثل Ollama) واستخراج نماذجها تلقائياً لإضافتها لقائمة الاختيار." else "The app will scan common ports (like Ollama) and automatically extract models to add to the selection list.", style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        enabled = !isScanning && termuxInstalled, 
+                        onClick = { scanLocalTools() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isScanning) (if (isArabic) "جاري البحث..." else "Scanning...") else (if (isArabic) "بدء البحث التلقائي" else "Start Auto-Scan"))
+                    }
+                }
+            }
+        }
+
         item {
             Card {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -152,6 +224,50 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         }
         item { Text(if (isArabic) "إرسال الأمر لا يثبت اكتمال التنفيذ؛ النتيجة الحالية تُراجع من إشعارات ومخرجات Termux." else "Command submission is not proof of completion; inspect Termux notifications and output.", style = MaterialTheme.typography.bodySmall) }
     }
+
+    // نافذة الموافقة على الأدوات المكتشفة
+    if (showScanDialog && discoveredTools.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showScanDialog = false },
+            title = { Text(if (isArabic) "تم العثور على أدوات محلية!" else "Local tools found!") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (isArabic) "هل توافقين على إضافة هذه الأدوات ونماذجها إلى قائمة الاختيار؟" else "Do you approve adding these tools and their models to the selection list?")
+                    discoveredTools.forEach { (name, url, _) ->
+                        Card {
+                            Column(Modifier.padding(8.dp)) {
+                                Text(name, style = MaterialTheme.typography.titleSmall)
+                                Text(url, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch(Dispatchers.IO) {
+                        discoveredTools.forEach { (name, url, id) ->
+                            secureStore.saveProvider(id, name, url, "")
+                            try {
+                                val raw = aiClient.listModels(url, "")
+                                val models = aiClient.parseModelIds(raw)
+                                secureStore.saveModels(id, models)
+                            } catch (_: Exception) {}
+                        }
+                        withContext(Dispatchers.Main) {
+                            status = if (isArabic) "تمت إضافة الأدوات المحلية بنجاح! ستجدينها في قائمة اختيار النموذج." else "Local tools added successfully! You will find them in the model selection list."
+                            showScanDialog = false
+                        }
+                    }
+                }) { Text(if (isArabic) "موافقة وإضافة" else "Approve & Add") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showScanDialog = false }) { Text(if (isArabic) "إلغاء" else "Cancel") }
+            }
+        )
+    }
+
+    // نافذة الموافقة على تثبيت الحزم (القديمة)
     if (pendingApproval != null) {
         val selected = pendingApproval!!
         AlertDialog(

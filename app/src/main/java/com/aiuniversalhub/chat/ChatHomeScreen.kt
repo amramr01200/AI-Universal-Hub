@@ -102,7 +102,6 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
     threads.forEach { thread ->
         val messages = JSONArray()
         thread.messages.forEach { messages.put(JSONObject().put("role", it.role).put("content", it.content)) }
-        // تم إصلاح كلمة title هنا
         array.put(JSONObject().put("id", thread.id).put("title", thread.title)
             .put("model", thread.model).put("messages", messages))
     }
@@ -388,15 +387,15 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
             prompt = "محتوى الملف المرفق ($fileName):\n```\n$fileContent\n```\n\n" + prompt
         }
         
-        val userText = if (imageUri != null) {
+        var userText = prompt
+        if (imageUri != null) {
             val prefix = if (prompt.isBlank()) "" else "\n"
-            prompt + prefix + (if (isArabic) "📎 صورة مرفقة" else "📎 Image attached")
-        } else {
-            prompt
+            val imgLabel = if (isArabic) "📎 صورة مرفقة" else "📎 Image attached"
+            userText = prompt + prefix + imgLabel
         }
         
         val thread = threads.first { it.id == selectedId }
-        val newTitle = if (thread.messages.isEmpty()) {
-            val defaultTitle = prompt.ifBlank { if (isArabic) "تحليل ملف/صورة" else "File/Image question" }
-            defaultTitle.take(36)
-     
+        var newTitle = thread.title
+        if (thread.messages.isEmpty()) {
+            val defaultTitle = if (isArabic) "تحليل ملف/صورة" else "File/Image question"
+            newTitle = prompt.ifBlank { defaultT

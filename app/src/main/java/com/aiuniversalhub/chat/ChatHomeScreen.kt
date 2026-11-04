@@ -102,6 +102,7 @@ private fun saveChatThreads(context: android.content.Context, threads: List<Chat
     threads.forEach { thread ->
         val messages = JSONArray()
         thread.messages.forEach { messages.put(JSONObject().put("role", it.role).put("content", it.content)) }
+        // تم إصلاح كلمة title هنا
         array.put(JSONObject().put("id", thread.id).put("title", thread.title)
             .put("model", thread.model).put("messages", messages))
     }
@@ -398,5 +399,4 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         val newTitle = if (thread.messages.isEmpty()) {
             val defaultTitle = prompt.ifBlank { if (isArabic) "تحليل ملف/صورة" else "File/Image question" }
             defaultTitle.take(36)
-        } else {
-            thread.titl
+     

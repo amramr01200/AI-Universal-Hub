@@ -53,6 +53,16 @@ object TermuxBridgeAdapter {
         return submit(context, command, "/data/data/com.termux/files/home", "diagnostic:$diagnosticId", conversationId)
     }
 
+    // دالة جديدة: تسمح بإرسال أمر التشغيل الذي وافق عليه المستخدم مسبقاً (مثل ollama serve)
+    fun sendCustomApprovedCommand(context: Context, command: String, label: String, conversationId: Int = -1): Result {
+        if (!isInstalled(context)) return Result(false, "Termux is not installed.")
+        if (!canRunCommands(context)) return Result(false, "Grant Termux RUN_COMMAND permission to AI Universal Hub, then retry.")
+        if (command.isBlank()) return Result(false, "Command is blank.")
+        
+        // نستخدم دالة submit لإرسال الأمر في الخلفية
+        return submit(context, command, "/data/data/com.termux/files/home", label, conversationId)
+    }
+
     private fun submit(context: Context, command: String, workDir: String, label: String, conversationId: Int): Result {
         val requestCode = requestIds.incrementAndGet()
         val callbackIntent = Intent(context, TermuxResultReceiver::class.java).apply {

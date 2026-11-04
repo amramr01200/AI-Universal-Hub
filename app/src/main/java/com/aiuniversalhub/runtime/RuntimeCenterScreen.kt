@@ -17,8 +17,6 @@ import androidx.security.crypto.MasterKey
 import com.aiuniversalhub.data.SecureStore
 import com.aiuniversalhub.net.AiClient
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -75,35 +73,31 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         }
     }
 
-    // دالة البحث المتوازي السريع
+    // دالة البحث مع طباعة الأخطاء الدقيقة
     fun scanAndAutoAddTools() {
         isScanning = true
-        status = if (isArabic) "جاري البحث المتوازي في جميع المنافذ..." else "Parallel scanning all ports..."
+        status = if (isArabic) "جاري البحث المتوازي..." else "Parallel scanning..."
         scope.launch {
+            val found = mutableListOf<Triple<String, String, String>>()
+            val errors = mutableListOf<String>()
             val knownPorts = mapOf(
                 "Ollama" to "http://127.0.0.1:11434/v1",
-                "LM Studio" to "http://127.0.0.1:1234/v1",
-                "LocalAI" to "http://127.0.0.1:8080/v1",
-                "Jan.ai" to "http://127.0.0.1:1337/v1",
-                "Text Gen WebUI" to "http://127.0.0.1:5000/v1",
-                "Generic Python API" to "http://127.0.0.1:8000/v1"
+                "LM Studio" to "http://127.0.0.1:1234/v1"
             )
             
-            // فحص متوازي باستخدام async
-            val deferreds = knownPorts.map { (name, url) ->
-                async(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
+                knownPorts.forEach { (name, url) ->
                     try {
                         val raw = aiClient.listModels(url, "")
                         if (raw.isNotBlank()) {
-                            Triple(name, url, "local-" + name.lowercase().replace(" ", "-"))
-                        } else null
+                            found.add(Triple(name, url, "local-" + name.lowercase().replace(" ", "-")))
+                        }
                     } catch (e: Exception) {
-                        null
+                        // حفظ رسالة الخطأ لنعرف السبب
+                        errors.add("$name: ${e.message ?: "خطأ غير معروف"}")
                     }
                 }
             }
-            
-            val found = deferreds.awaitAll().filterNotNull()
             
             if (found.isNotEmpty()) {
                 withContext(Dispatchers.IO) {
@@ -123,11 +117,13 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                     }
                 }
                 withContext(Dispatchers.Main) {
-                    status = if (isArabic) "تمت إضافة ${found.size} أداة ونماذجها بنجاح!" else "Added ${found.size} tools and models successfully!"
+                    status = if (isArabic) "تمت إضافة ${found.size} أداة ونماذجها بنجاح!" else "Added ${found.size} tools successfully!"
                 }
             } else {
                 withContext(Dispatchers.Main) {
-                    status = if (isArabic) "لم يتم العثور على أدوات. تأكدي من تشغيل Ollama في Termux." else "No tools found. Make sure Ollama is running."
+                    // طباعة الأخطاء على الشاشة
+                    val errorMsg = if (errors.isNotEmpty()) errors.joinToString(" | ") else "لم يتم العثور على أي منفذ مفتوح."
+                    status = if (isArabic) "فشل الاتصال. الأخطاء: $errorMsg" else "Connection failed. Errors: $errorMsg"
                 }
             }
             isScanning = false

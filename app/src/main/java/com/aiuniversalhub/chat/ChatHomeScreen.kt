@@ -26,9 +26,11 @@ import androidx.compose.ui.unit.dp
 import com.aiuniversalhub.data.SecureStore
 import com.aiuniversalhub.net.AiClient
 import com.aiuniversalhub.net.LiveSearchClient
+import com.aiuniversalhub.runtime.TermuxBridgeAdapter
 import com.aiuniversalhub.tasks.TaskScheduler
 import com.aiuniversalhub.tasks.TaskRecordStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -37,8 +39,8 @@ import org.json.JSONArray
 private data class ChatMessage(val role: String, val content: String)
 
 private data class ModelOption(
-    val displayName: String, // الاسم الذي سيظهر في القائمة (مثلاً deepseek-chat (1))
-    val actualName: String,  // الاسم الحقيقي الذي سيُرسل للمزود (deepseek-chat)
+    val displayName: String,
+    val actualName: String,
     val providerId: String,
     val providerName: String,
     val baseUrl: String,
@@ -171,7 +173,6 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     var usageLabel by remember { mutableStateOf("") }
     var pendingImage by remember { mutableStateOf<Uri?>(null) }
 
-    // تجميع كل النماذج من كل المزودين وترتيبها وترقيمها
     val allGlobalModels = remember(registeredProviders, bridgeRefresh) {
         val list = mutableListOf<ModelOption>()
         registeredProviders.forEach { provider ->
@@ -188,7 +189,6 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
             if (options.size == 1) {
                 numbered.add(options[0])
             } else {
-                // ترتيب النماذج المتكررة حسب اسم المزود لإعطاء أرقام ثابتة
                 options.sortedBy { it.providerName }.forEachIndexed { index, opt ->
                     numbered.add(opt.copy(displayName = "$name (${index + 1})"))
                 }
@@ -264,7 +264,6 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     }
     val selected = threads.firstOrNull { it.id == selectedId } ?: threads.first()
 
-    // تمرير القائمة العالمية للشريط العلوي
     val currentDisplayName = allGlobalModels.find { it.actualName == selected.model }?.displayName ?: selected.model
     LaunchedEffect(currentDisplayName, allGlobalModels) {
         onTopModelOptionsChanged(currentDisplayName, allGlobalModels.map { it.displayName })
@@ -289,7 +288,6 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         onTopTokenCountChanged(values.joinToString(" / "))
     }
 
-    // عند اختيار نموذج من الشريط العلوي، نقوم بتبديل المزود النشط تلقائياً
     LaunchedEffect(topSelectedModel, selectedId, allGlobalModels) {
         if (topSelectedModel.isNotBlank()) {
             val option = allGlobalModels.find { it.displayName == topSelectedModel }
@@ -297,7 +295,6 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                 threads = threads.map { if (it.id == selectedId) it.copy(model = option.actualName) else it }
                 store.saveSelectedModel(option.providerId, option.actualName)
                 
-                // تحديث بيانات المزود النشط في الواجهة
                 if (providerName != option.providerName) {
                     providerName = option.providerName
                     baseUrl = option.baseUrl
@@ -336,10 +333,19 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         val targetThreadId = selectedId
         scope.launch {
             try {
-                // البحث عن بيانات المزود الصحيحة المرتبطة بالنموذج المختار
                 val option = allGlobalModels.find { it.actualName == selected.model }
                 val sendBaseUrl = option?.baseUrl ?: baseUrl
                 val sendApiKey = option?.apiKey ?: apiKey
+                
+                // --- التشغيل التلقائي في الخلفية ---
+                val startCommand = option?.providerId?.let { store.getProviderStartCommand(it) } ?: ""
+                if (startCommand.isNotBlank()) {
+                    status = if (isArabic) "جاري تشغيل الأداة المحلية في الخلفية..." else "Starting local tool in background..."
+                    TermuxBridgeAdapter.sendCustomApprovedCommand(context, startCommand, "auto-start", selectedId)
+                    delay(3000) // الانتظار 3 ثوانٍ حتى يفتح المنفذ
+                    status = ""
+                }
+                // ---------------------------------
 
                 val response = withContext(Dispatchers.IO) {
                     if (imageUri != null) {
@@ -378,11 +384,4 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val messageListState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(selected.id, selected.messages.size, busy) {
-        if (selected.messages.isNotEmpty()) messageListState.animateScrollToItem(selected.messages.size - 1)
-    }
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(
-                m
+        if (selected.

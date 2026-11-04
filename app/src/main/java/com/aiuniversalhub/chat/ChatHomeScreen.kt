@@ -396,6 +396,8 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         
         val thread = threads.first { it.id == selectedId }
         var newTitle = thread.title
+        
+        // تم تبسيط هذا الجزء بالكامل لتفادي أي أخطاء برمجية
         if (thread.messages.isEmpty()) {
-            val defaultTitle = if (isArabic) "تحليل ملف/صورة" else "File/Image question"
-            newTitle = prompt.ifBlank { defaultT
+            if (prompt.isNotBlank()) {
+                newTitle = p

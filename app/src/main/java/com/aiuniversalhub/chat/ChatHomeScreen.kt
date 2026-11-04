@@ -376,27 +376,31 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         val imageUri = pendingImage
         val fileContent = pendingTextFileContent
         val fileName = pendingTextFileName
-        
+
         if (prompt.isBlank() && imageUri == null && fileContent == null) return
         if (selected.model.isBlank()) {
             status = if (isArabic) "اختاري نموذج المحادثة أولاً." else "Select a conversation model first."
             return
         }
-        
+
         if (fileContent != null) {
             prompt = "الملف المرفق ($fileName):\n$fileContent\n\n" + prompt
         }
-        
+
         var userText = prompt
         if (imageUri != null) {
             val prefix = if (prompt.isBlank()) "" else "\n"
             val imgLabel = if (isArabic) "📎 صورة" else "📎 Image"
             userText = prompt + prefix + imgLabel
         }
-        
+
         val thread = threads.first { it.id == selectedId }
         
-        val finalTitle: String
+        // --- بداية التبسيط القصوى لتجنب أي خطأ ---
+        var finalTitle = thread.title
         if (thread.messages.isEmpty()) {
-            val baseTitle = if (prompt.isNotBlank()) prompt else (if (isArabic) "تحليل ملف/صورة" else "File/Image question")
-            finalTitle = if (baseTitle.length > 36) baseTitle.substring(0, 36
+            var baseTitle = "File/Image question"
+            if (isArabic) {
+                baseTitle = "تحليل ملف/صورة"
+            }
+            if (prompt.isNotBlank()) 

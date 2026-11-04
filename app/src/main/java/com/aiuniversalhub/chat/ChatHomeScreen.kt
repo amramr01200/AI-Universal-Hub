@@ -397,7 +397,7 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         val thread = threads.first { it.id == selectedId }
         var newTitle = thread.title
         
-        // تم تبسيط هذا الجزء بالكامل لتفادي أي أخطاء برمجية
+        // هذا الجزء تمت إعادة كتابته بأبسط صورة ممكنة لضمان عدم حدوث أي خطأ
         if (thread.messages.isEmpty()) {
             if (prompt.isNotBlank()) {
-                newTitle = p
+            

@@ -406,3 +406,307 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                 baseTitle = prompt
             }
   
+                    if (baseTitle.length > 36) {
+                finalTitle = baseTitle.substring(0, 36)
+            } else {
+                finalTitle = baseTitle
+            }
+        }
+
+        val updated = thread.copy(
+            title = finalTitle,
+            messages = thread.messages + ChatMessage("user", userText)
+        )
+        
+        threads = threads.map { t -> if (t.id == selectedId) updated else t }
+        draft = ""
+        pendingImage = null
+        pendingTextFileContent = null
+        pendingTextFileName = null
+        busy = true
+        status = ""
+        val targetThreadId = selectedId
+        
+        scope.launch {
+            try {
+                val option = allGlobalModels.find { it.actualName == selected.model }
+                val sendBaseUrl = option?.baseUrl ?: baseUrl
+                val sendApiKey = option?.apiKey ?: apiKey
+                
+                val startCommand = option?.providerId?.let { store.getProviderStartCommand(it) } ?: ""
+                if (startCommand.isNotBlank()) {
+                    status = if (isArabic) "جاري تشغيل الأداة المحلية..." else "Starting local tool..."
+                    TermuxBridgeAdapter.sendCustomApprovedCommand(context, startCommand, "auto-start", selectedId)
+                    delay(3000)
+                    status = ""
+                }
+
+                val response = withContext(Dispatchers.IO) {
+                    if (imageUri != null) {
+                        val bytes = context.contentResolver.openInputStream(imageUri)?.use { it.readBytes() }
+                            ?: error(if (isArabic) "تعذر قراءة الصورة." else "Could not read the image.")
+                        require(bytes.size <= 12 * 1024 * 1024) {
+                            if (isArabic) "حجم الصورة كبير." else "Image is too large."
+                        }
+                        val mime = context.contentResolver.getType(imageUri) ?: "image/jpeg"
+                        client.chatWithImageHistory(sendBaseUrl, sendApiKey, selected.model, updated.messages.dropLast(1).map { it.role to it.content }, prompt, mime, Base64.encodeToString(bytes, Base64.NO_WRAP))
+                    } else {
+                        val history = updated.messages.map { it.role to it.content }
+                        client.chatWithHistory(sendBaseUrl, sendApiKey, selected.model, history)
+                    }
+                }
+                val usage = client.parseUsage(response)
+                usageLabel = if (usage.totalTokens != null) {
+                    (if (isArabic) "استهلاك: " else "Usage: ") + usage.totalTokens + (if (isArabic) " توكن" else " tokens")
+                } else {
+                    if (isArabic) "الاستهلاك غير متاح" else "Usage unavailable"
+                }
+                val answer = JSONObject(response).optJSONArray("choices")?.optJSONObject(0)
+                    ?.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() } ?: response
+                threads = threads.map { t ->
+                    if (t.id == targetThreadId) t.copy(messages = t.messages + ChatMessage("assistant", answer)) else t
+                }
+                status = ""
+            } catch (ex: Exception) {
+                status = ex.message ?: if (isArabic) "فشل الاتصال" else "Connection failed"
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val messageListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(selected.id, selected.messages.size, busy) {
+        if (selected.messages.isNotEmpty()) messageListState.animateScrollToItem(selected.messages.size - 1)
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier.fillMaxHeight().widthIn(min = 280.dp, max = 340.dp),
+                drawerContainerColor = androidx.compose.ui.graphics.Color(0xFF171717)
+            ) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (isArabic) "المحادثات السابقة" else "Chat history", color = androidx.compose.ui.graphics.Color(0xFFD6B56D), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        val id = nextId++
+                        threads = listOf(ChatThread(id, if (isArabic) "محادثة جديدة" else "New chat")) + threads
+                        selectedId = id
+                        pendingImage = null
+                        pendingTextFileContent = null
+                        status = ""
+                        scope.launch { drawerState.close() }
+                    }) { Text("＋", color = androidx.compose.ui.graphics.Color(0xFFD6B56D)) }
+                }
+                HorizontalDivider(color = androidx.compose.ui.graphics.Color.DarkGray)
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(threads, key = { it.id }) { thread ->
+                        NavigationDrawerItem(
+                            label = {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Text(thread.title, maxLines = 1)
+                                    Text(thread.messages.lastOrNull()?.content ?: if (isArabic) "محادثة جديدة" else "New conversation", maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                                }
+                            },
+                            selected = thread.id == selectedId,
+                            onClick = {
+                                selectedId = thread.id
+                                pendingImage = null
+                                pendingTextFileContent = null
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = androidx.compose.ui.graphics.Color(0xFF3A3020),
+                                selectedTextColor = androidx.compose.ui.graphics.Color(0xFFFFE3A0),
+                                unselectedTextColor = androidx.compose.ui.graphics.Color.White
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    ) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = {
+                    val id = nextId++
+                    threads = listOf(ChatThread(id, if (isArabic) "محادثة جديدة" else "New chat")) + threads
+                    selectedId = id
+                    pendingImage = null
+                    pendingTextFileContent = null
+                    status = ""
+                }) { Text("＋", color = androidx.compose.ui.graphics.Color(0xFFD6B56D)) }
+                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                    Text("☰", color = androidx.compose.ui.graphics.Color(0xFFD6B56D), style = MaterialTheme.typography.headlineSmall)
+                }
+            }
+            HorizontalDivider()
+            LazyColumn(
+                state = messageListState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (selected.messages.isEmpty()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("⚙", style = MaterialTheme.typography.displayMedium, color = androidx.compose.ui.graphics.Color(0xFFD6B56D))
+                                Text(if (isArabic) "ابدئي محادثة جديدة" else "Start a new conversation", style = MaterialTheme.typography.titleLarge)
+                                Text(if (isArabic) "اختاري نموذجًا واكتبي رسالتك بالأسفل" else "Choose a model and write below", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+                items(selected.messages) { msg ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.role == "user") Arrangement.End else Arrangement.Start) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(if (msg.role == "user") 0.88f else 0.98f),
+                            colors = CardDefaults.cardColors(containerColor = if (msg.role == "user") androidx.compose.ui.graphics.Color(0xFFF2E8D5) else androidx.compose.ui.graphics.Color(0xFFF7F7F7)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (msg.role == "user") (if (isArabic) "أنتِ" else "You") else if (msg.role == "tool") "Termux" else "AI",
+                                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+                                        color = androidx.compose.ui.graphics.Color(0xFF98722F))
+                                    TextButton(onClick = {
+                                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("AI Universal Hub", msg.content))
+                                        Toast.makeText(context, if (isArabic) "تم نسخ النص" else "Text copied", Toast.LENGTH_SHORT).show()
+                                    }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                                        Text(if (isArabic) "نسخ" else "Copy", color = androidx.compose.ui.graphics.Color(0xFF98722F))
+                                    }
+                                }
+                                Text(msg.content, style = MaterialTheme.typography.bodyLarge, color = androidx.compose.ui.graphics.Color(0xFF211A1E))
+                            }
+                        }
+                    }
+                }
+                if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            }
+            if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            if (usageLabel.isNotBlank()) Text(usageLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            if (pendingImage != null) Text(if (isArabic) "صورة جاهزة للإرفاق" else "Image ready to attach", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+            if (pendingTextFileName != null) Text(if (isArabic) "ملف جاهز للإرفاق: $pendingTextFileName" else "File ready to attach: $pendingTextFileName", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = androidx.compose.ui.graphics.Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFFD8D1C5)),
+                shadowElevation = 2.dp
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    IconButton(onClick = { textFilePicker.launch("*/*") }, enabled = !busy) {
+                        Text("📄", style = MaterialTheme.typography.headlineMedium)
+                    }
+                    IconButton(onClick = { imagePicker.launch("image/*") }, enabled = !busy) {
+                        Text("＋", color = androidx.compose.ui.graphics.Color(0xFF98722F), style = MaterialTheme.typography.headlineMedium)
+                    }
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text(if (isArabic) "اكتبي رسالتك..." else "Message AI...") },
+                        enabled = !busy,
+                        maxLines = 6,
+                        minLines = 1,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            unfocusedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                            disabledBorderColor = androidx.compose.ui.graphics.Color.Transparent
+                        )
+                    )
+                    IconButton(onClick = {
+                        try {
+                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (isArabic) "ar-EG" else "en-US")
+                                putExtra(RecognizerIntent.EXTRA_PROMPT, if (isArabic) "تحدثي الآن" else "Speak now")
+                            }
+                            speechInput.launch(intent)
+                        } catch (_: Exception) { status = if (isArabic) "الإملاء الصوتي غير متاح." else "Speech input unavailable." }
+                    }, enabled = !busy) { Text("🎙") }
+                    IconButton(onClick = { sendMessage() }, enabled = !busy && (draft.isNotBlank() || pendingImage != null || pendingTextFileContent != null)) {
+                        Text("➤", color = androidx.compose.ui.graphics.Color(0xFF98722F), style = MaterialTheme.typography.headlineSmall)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showLiveSearch) {
+        LiveSearchDialog(isArabic = isArabic, onDismiss = { showLiveSearch = false })
+    }
+    if (showTaskManager) {
+        BackgroundTaskDialog(
+            isArabic = isArabic,
+            providerId = providerStorageId(providerName, registeredProviders),
+            providerName = providerName,
+            model = selected.model,
+            onDismiss = { showTaskManager = false }
+        )
+    }
+
+    if (showSettings) {
+        AlertDialog(
+            onDismissRequest = { showSettings = false },
+            title = { Text(if (isArabic) "إعدادات مزود الذكاء الاصطناعي" else "AI provider settings") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    var showProviderNetworks by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = { showProviderNetworks = !showProviderNetworks }) {
+                        Text(if (isArabic) "◎ شبكات ومزوّدو الخدمات الخارجية" else "◎ External provider networks")
+                    }
+                    if (showProviderNetworks) {
+                        Text(if (isArabic)
+                            "اختاري مزودًا لفتح كتالوج موديلاته أو صفحة إنشاء مفتاح API. بعد إنشاء المفتاح، اختاري المزود من القائمة وأضيفي عنوانه ومفتاحه."
+                            else "Open a provider's model catalog or API-key page. After creating a key, select the provider and enter its endpoint and key.",
+                            style = MaterialTheme.typography.bodySmall)
+                        val networkProviders = listOf(
+                            Triple("OpenRouter", "https://openrouter.ai/api/v1", "https://openrouter.ai/models|https://openrouter.ai/settings/keys"),
+                            Triple("OpenAI", "https://api.openai.com/v1", "https://platform.openai.com/docs/models|https://platform.openai.com/api-keys"),
+                            Triple("Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "https://ai.google.dev/gemini-api/docs/models|https://aistudio.google.com/app/apikey"),
+                            Triple("Groq", "https://api.groq.com/openai/v1", "https://console.groq.com/docs/models|https://console.groq.com/keys"),
+                            Triple("DeepSeek", "https://api.deepseek.com/v1", "https://api-docs.deepseek.com/|https://platform.deepseek.com/api_keys"),
+                            Triple("Mistral AI", "https://api.mistral.ai/v1", "https://docs.mistral.ai/getting-started/models/|https://console.mistral.ai/api-keys/"),
+                            Triple("Together AI", "https://api.together.xyz/v1", "https://www.together.ai/models|https://api.together.ai/settings/api-keys"),
+                            Triple("AIMLAPI", "https://api.aimlapi.com/v1", "https://docs.aimlapi.com/|https://aimlapi.com/app/onboarding?returnTo=/keys?from=get-api-key")
+                        )
+                        networkProviders.forEach { entry ->
+                            val links = entry.third.split("|")
+                            Card {
+                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(entry.first, style = MaterialTheme.typography.titleSmall)
+                                    Text((if (isArabic) "عنوان API: " else "API: ") + entry.second,
+                                        style = MaterialTheme.typography.bodySmall)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        TextButton(onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(links[0])))
+                                        }) { Text(if (isArabic) "الموديلات" else "Models") }
+                                        TextButton(onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(links[1])))
+                                        }) { Text(if (isArabic) "مفتاح API" else "API key") }
+                                        TextButton(onClick = {
+                                            providerName = entry.first
+                                            baseUrl = entry.second
+                                            apiKey = ""
+                                        }) { Text(if (isArabic) "اختيار" else "Select") }
+                                    }
+                                }
+                            }
+                        }
+                        Text(if (isArabic)
+                            "تنبيه: وجود موديل في الكتالوج لا يعني أنه مجاني. تحققي من الأسعار والحدود قبل الاستخدام. مفتاح API مختلف عن اشتراك ChatGPT."
+                            else "A model appearing in a catalog does not mean it is free. Check pricing and limits. API keys are separate from ChatGPT subscriptions.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    var providerExpanded by remember { mutableSta

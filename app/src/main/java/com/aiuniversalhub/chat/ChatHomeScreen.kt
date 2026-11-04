@@ -229,12 +229,12 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                                 registeredProviders = store.listProviders()
                                 status = if (isArabic) "تم استيراد ${providers.size} مزود بنجاح!" else "Imported ${providers.size} providers successfully!"
                             }
-                        }.onFailure { e ->
-                            withContext(Dispatchers.Main) { status = "خطأ: ${e.message}" }
+                        }.onFailure { ex ->
+                            withContext(Dispatchers.Main) { status = "خطأ: ${ex.message}" }
                         }
                     }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) { status = "فشل قراءة الملف: ${e.message}" }
+                } catch (ex: Exception) {
+                    withContext(Dispatchers.Main) { status = "فشل قراءة الملف: ${ex.message}" }
                 } finally {
                     withContext(Dispatchers.Main) { busy = false }
                 }
@@ -255,9 +255,9 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
                             status = if (isArabic) "تم إرفاق الملف: $fileName" else "File attached: $fileName"
                         }
                     }
-                } catch (e: Exception) {
+                } catch (ex: Exception) {
                     withContext(Dispatchers.Main) {
-                        status = if (isArabic) "فشل قراءة الملف: ${e.message}" else "Failed to read file: ${e.message}"
+                        status = if (isArabic) "فشل قراءة الملف: ${ex.message}" else "Failed to read file: ${ex.message}"
                     }
                 }
             }
@@ -352,7 +352,7 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         if (topSelectedModel.isNotBlank()) {
             val option = allGlobalModels.find { it.displayName == topSelectedModel }
             if (option != null && option.actualName != selected.model) {
-                threads = threads.map { if (it.id == selectedId) it.copy(model = option.actualName) else it }
+                threads = threads.map { t -> if (t.id == selectedId) t.copy(model = option.actualName) else t }
                 store.saveSelectedModel(option.providerId, option.actualName)
                 
                 if (providerName != option.providerName) {
@@ -367,7 +367,7 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
     }
 
     fun updateSelectedModel(value: String) {
-        threads = threads.map { if (it.id == selectedId) it.copy(model = value) else it }
+        threads = threads.map { t -> if (t.id == selectedId) t.copy(model = value) else t }
         store.saveSelectedModel(providerStorageId(providerName, registeredProviders), value)
     }
 
@@ -389,8 +389,13 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
         
         val userText = prompt + if (imageUri != null) (if (prompt.isBlank()) "" else "\n") + (if (isArabic) "📎 صورة مرفقة" else "📎 Image attached") else ""
         val thread = threads.first { it.id == selectedId }
+        
+        val titleText = if (thread.messages.isEmpty()) {
+            val defaultTitle = prompt.ifBlank { if (isArabic) "تحليل ملف/صورة" else "File/Image question" }
+            defaultTitle.take(36)
+        } else {
+            thread.title
+        }
+        
         val updated = thread.copy(
-            title = if (thread.messages.isEmpty()) (prompt.ifBlank { if (isArabic) "تحليل ملف/صورة" else "File/Image question" }).take(36) else thread.title,
-            messages = thread.messages + ChatMessage("user", userText)
-        )
-        threads = threads.map { if (it.id == selectedId) updated e
+            title = title

@@ -387,13 +387,16 @@ fun ChatHomeScreen(isArabic: Boolean, openAiSettings: Boolean = false, onAiSetti
             prompt = "محتوى الملف المرفق ($fileName):\n```\n$fileContent\n```\n\n" + prompt
         }
         
-        val userText = prompt + if (imageUri != null) (if (prompt.isBlank()) "" else "\n") + (if (isArabic) "📎 صورة مرفقة" else "📎 Image attached") else ""
+        val userText = if (imageUri != null) {
+            val prefix = if (prompt.isBlank()) "" else "\n"
+            prompt + prefix + (if (isArabic) "📎 صورة مرفقة" else "📎 Image attached")
+        } else {
+            prompt
+        }
         
         val thread = threads.first { it.id == selectedId }
-        val newTitle = if (thread.messages.isEmpty()) (prompt.ifBlank { if (isArabic) "تحليل ملف/صورة" else "File/Image question" }).take(36) else thread.title
-        
-        val updated = thread.copy(
-            title = newTitle,
-            messages = thread.messages + ChatMessage("user", userText)
-        )
-     
+        val newTitle = if (thread.messages.isEmpty()) {
+            val defaultTitle = prompt.ifBlank { if (isArabic) "تحليل ملف/صورة" else "File/Image question" }
+            defaultTitle.take(36)
+        } else {
+            thread.titl

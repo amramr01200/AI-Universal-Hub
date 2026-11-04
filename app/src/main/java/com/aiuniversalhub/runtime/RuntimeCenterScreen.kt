@@ -37,11 +37,10 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
     var runCommandGranted by remember { mutableStateOf(TermuxBridgeAdapter.canRunCommands(context)) }
     var status by remember { mutableStateOf("") }
     
-    // متغيرات البحث التلقائي وأوامر التشغيل
     var isScanning by remember { mutableStateOf(false) }
     var showScanDialog by remember { mutableStateOf(false) }
     var discoveredTools by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
-    var startCommands by remember { mutableStateOf<Map<String, String>>(emptyMap()) } // لحفظ الأوامر المكتوبة
+    var startCommands by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     val runCommandPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         runCommandGranted = granted
@@ -70,8 +69,11 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
 
     fun runDiagnostic(id: String) {
         val result = TermuxBridgeAdapter.sendDiagnostic(context, id, activeConversationId)
-        status = result.message
-        if (result.submitted) status = if (isArabic) "تم إرسال طلب الفحص؛ اضغطي تحديث النتائج بعد لحظات." else result.message
+        status = if (result.submitted) {
+            if (isArabic) "تم إرسال طلب الفحص؛ اضغطي تحديث النتائج بعد لحظات." else result.message
+        } else {
+            result.message
+        }
     }
 
     fun scanLocalTools() {
@@ -99,7 +101,6 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
             isScanning = false
             if (found.isNotEmpty()) {
                 discoveredTools = found
-                // نضع أوامر افتراضية مبدئية لكل أداة
                 val defaultCommands = mutableMapOf<String, String>()
                 found.forEach { (name, _, id) -> 
                     if (name == "Ollama") defaultCommands[id] = "ollama serve &"
@@ -226,7 +227,6 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
         item { Text(if (isArabic) "إرسال الأمر لا يثبت اكتمال التنفيذ؛ النتيجة الحالية تُراجع من إشعارات ومخرجات Termux." else "Command submission is not proof of completion; inspect Termux notifications and output.", style = MaterialTheme.typography.bodySmall) }
     }
 
-    // نافذة الموافقة على الأدوات المكتشفة (تم إضافة حقل أمر التشغيل)
     if (showScanDialog && discoveredTools.isNotEmpty()) {
         AlertDialog(
             onDismissRequest = { showScanDialog = false },
@@ -259,7 +259,6 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                     scope.launch(Dispatchers.IO) {
                         discoveredTools.forEach { (name, url, id) ->
                             secureStore.saveProvider(id, name, url, "")
-                            // حفظ أمر التشغيل
                             val cmd = startCommands[id] ?: ""
                             if (cmd.isNotBlank()) {
                                 secureStore.saveProviderStartCommand(id, cmd)
@@ -298,4 +297,7 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
                 runningComponent = selected.id
                 val result = TermuxBridgeAdapter.sendApprovedCommand(context, selected.id, activeConversationId)
                 status = result.message
-                audit.record("termux_command", selected.id + ": " + selected.installCommand, if 
+                audit.record("termux_command", selected.id + ": " + selected.installCommand, if (result.submitted) "submitted" else "failed")
+                runningComponent = null
+            }) { Text(if (isArabic) "موافقة وتنفيذ" else "Approve & run") } },
+            dismissButton = { TextButton

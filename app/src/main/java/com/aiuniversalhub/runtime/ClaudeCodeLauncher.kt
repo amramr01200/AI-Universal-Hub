@@ -22,10 +22,10 @@ object ClaudeCodeLauncher {
 
     fun openSetup(context: Context): Result = openTerminal(
         context,
-        "if [ ! -d \"\$HOME/AI-Universal-Hub/.git\" ]; then " +
+        "if [ ! -d \"\$HOME/AI-Universal-Hub-claude-bootstrap/.git\" ]; then " +
             "pkg install -y git && git clone --branch feature/claude-code-termux " +
             "https://github.com/amramr01200/AI-Universal-Hub.git \"\$HOME/AI-Universal-Hub\"; fi; " +
-            "bash \"\$HOME/AI-Universal-Hub/scripts/claude-code-termux-setup.sh\""
+            "bash \"\$HOME/AI-Universal-Hub-claude-bootstrap/scripts/claude-code-termux-setup.sh\""
     )
 
     fun openClaudeCode(context: Context): Result = openTerminal(

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 echo "AI Universal Hub - Claude Code + FreeLLMAPI setup"
-echo "This installs Claude Code inside Debian (proot-distro), not directly in Android."
+echo "Claude Code will run in Debian under Termux (proot-distro)."
+
 pkg update -y
 pkg install -y proot-distro curl
 
@@ -10,20 +11,22 @@ if ! proot-distro list-installed | grep -qE '^[[:space:]]*debian([[:space:]]|$)'
   proot-distro install debian
 fi
 
+# Install system dependencies and create a non-root account.
 proot-distro login debian -- bash -lc '
 set -euo pipefail
-
-case "$(uname -m)" in
-  aarch64|x86_64) ;;
-  *) echo "Unsupported CPU architecture for the official Claude Code Linux installer: $(uname -m)"; exit 1 ;;
-esac
-
 apt-get update
 apt-get install -y ca-certificates curl git
+if ! id claudeuser >/dev/null 2>&1; then
+  useradd --create-home --shell /bin/bash claudeuser
+fi
+install -d -o claudeuser -g claudeuser -m 700 /home/claudeuser/.config/claude-code-free
+install -d -o claudeuser -g claudeuser -m 700 /home/claudeuser/.local/bin
+'
 
-mkdir -p "$HOME/.config/claude-code-free" "$HOME/.local/bin"
-chmod 700 "$HOME/.config/claude-code-free"
-
+# Run the official installer and save the existing gateway key as the
+# unprivileged Debian user. The key is entered invisibly and never echoed.
+proot-distro login debian --user claudeuser -- bash -lc '
+set -euo pipefail
 read -r -p "FreeLLMAPI server origin [http://127.0.0.1:3001]: " api_origin
 api_origin="${api_origin:-http://127.0.0.1:3001}"
 case "$api_origin" in
@@ -32,7 +35,7 @@ case "$api_origin" in
 esac
 api_origin="${api_origin%/}"
 
-read -r -s -p "Paste your unified FreeLLMAPI key (input is hidden): " api_token
+read -r -s -p "Paste your existing unified FreeLLMAPI key (input hidden): " api_token
 printf "\n"
 if [ -z "$api_token" ]; then echo "The key cannot be empty."; exit 1; fi
 
@@ -45,14 +48,14 @@ if ! command -v claude >/dev/null 2>&1; then
   curl -fsSL https://claude.ai/install.sh | bash
 fi
 
-cat > "$HOME/.local/bin/claude-free" <<'LAUNCHER'
+cat > "$HOME/.local/bin/claude-free" <<'"'"'LAUNCHER'"'"'
 #!/usr/bin/env bash
 set -euo pipefail
 CONFIG_DIR="$HOME/.config/claude-code-free"
 TOKEN_FILE="$CONFIG_DIR/token"
 BASE_FILE="$CONFIG_DIR/base-url"
 if [ ! -s "$TOKEN_FILE" ] || [ ! -s "$BASE_FILE" ]; then
-  echo "Claude Code gateway credentials are missing. Re-run the setup script."
+  echo "Gateway credentials are missing. Re-run the setup script."
   exit 1
 fi
 export ANTHROPIC_BASE_URL="$(cat "$BASE_FILE")"
@@ -63,8 +66,8 @@ LAUNCHER
 chmod 700 "$HOME/.local/bin/claude-free"
 
 echo
-echo "Setup complete."
-echo "Start FreeLLMAPI in Termux first, then run:"
-echo "  export PATH=\"\$HOME/.local/bin:\$PATH\" && claude-free"
-echo "The unified key is stored in Debian home with owner-only file permissions."
+echo "Setup complete. Start FreeLLMAPI first, then run claude-free in Debian."
 '
+echo
+echo "To open Debian later:"
+echo "  proot-distro login debian --user claudeuser"

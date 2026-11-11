@@ -6,8 +6,8 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 
 /**
- * Opens a user-visible Termux terminal for the Claude Code setup/runtime.
- * No API keys or arbitrary shell text are accepted by this bridge.
+ * Opens a user-visible Termux terminal for Claude Code setup and execution.
+ * Secrets are entered only in the interactive setup prompt, never as command arguments.
  */
 object ClaudeCodeLauncher {
     private const val TERMUX_PACKAGE = "com.termux"
@@ -19,18 +19,20 @@ object ClaudeCodeLauncher {
 
     private const val HOME = "/data/data/com.termux/files/home"
     private const val BASH = "/data/data/com.termux/files/usr/bin/bash"
+    private const val BOOTSTRAP_DIR = "AI-Universal-Hub-claude-bootstrap"
 
     fun openSetup(context: Context): Result = openTerminal(
         context,
-        "if [ ! -d \"\$HOME/AI-Universal-Hub-claude-bootstrap/.git\" ]; then " +
+        "if [ ! -d \"\$HOME/$BOOTSTRAP_DIR/.git\" ]; then " +
             "pkg install -y git && git clone --branch feature/claude-code-termux " +
-            "https://github.com/amramr01200/AI-Universal-Hub.git \"\$HOME/AI-Universal-Hub\"; fi; " +
-            "bash \"\$HOME/AI-Universal-Hub-claude-bootstrap/scripts/claude-code-termux-setup.sh\""
+            "https://github.com/amramr01200/AI-Universal-Hub.git \"\$HOME/$BOOTSTRAP_DIR\"; fi; " +
+            "bash \"\$HOME/$BOOTSTRAP_DIR/scripts/claude-code-termux-setup.sh\""
     )
 
     fun openClaudeCode(context: Context): Result = openTerminal(
         context,
-        "proot-distro login ubuntu --user hub -- bash -lc 'export PATH="$HOME/.local/bin:$PATH"; cd \"\$HOME/AI-Universal-Hub\" 2>/dev/null || cd \"\$HOME\"; exec claude'"
+        "proot-distro login ubuntu --user hub -- bash -lc 'export PATH=\"\$HOME/.local/bin:\$PATH\"; " +
+            "cd \"\$HOME/AI-Universal-Hub\" 2>/dev/null || cd \"\$HOME\"; exec claude'"
     )
 
     private fun openTerminal(context: Context, command: String): Result {
@@ -43,8 +45,7 @@ object ClaudeCodeLauncher {
             putExtra(EXTRA_PATH, BASH)
             putExtra(EXTRA_ARGUMENTS, arrayOf("-lc", command))
             putExtra(EXTRA_WORKDIR, HOME)
-            // false requests a visible Termux terminal session so prompts and Claude's
-            // permission confirmations remain under the user's direct control.
+            // A visible session preserves interactive login and Claude permission prompts.
             putExtra(EXTRA_BACKGROUND, false)
         }
         return try {

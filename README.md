@@ -57,3 +57,17 @@ Docker is listed as a compatibility target, not a native Android package: a conv
 ## Canonical product and design specification
 
 The complete approved requirements, including the golden-gear identity, black-and-gold app shell, white chat workspace, Arabic/English support, providers, routing, tools, MCP, GitHub agent, runtime management, Chrome workflows, background continuity, security, and acceptance tests are maintained in [`PRODUCT_SPECIFICATION.md`](PRODUCT_SPECIFICATION.md). This specification is the source of truth for implementation and must not be reduced to the currently implemented feature set.
+
+
+## Claude Code through FreeLLMAPI on Android / Termux
+
+The `Claude Code` screen provides a Termux setup command for installing Claude Code inside a Debian `proot-distro` environment. This avoids assuming that the native Android/Termux userspace is a supported Claude Code platform.
+
+- Start the FreeLLMAPI server in Termux on the phone (default origin: `http://127.0.0.1:3001`).
+- Run `scripts/setup-claude-code-termux.sh` from Termux. It installs Debian, installs Claude Code using Anthropic's official Linux installer, and prompts for the existing unified FreeLLMAPI key with hidden input.
+- The key is saved under Debian's `~/.config/claude-code-free/token` with owner-only permissions. It is not placed in the app source, Git, shell command arguments, or chat.
+- Start the CLI with `claude-free` inside Debian after FreeLLMAPI is running.
+
+FreeLLMAPI documents an Anthropic Messages API endpoint at `/v1/messages`. Claude Code must use the server origin (without `/v1`) and `ANTHROPIC_AUTH_TOKEN` (not `ANTHROPIC_API_KEY`). The CLI runs in a separate Termux terminal session; this integration does not embed its interactive terminal in the Hub chat. The model family mapping and available quota are controlled by the user's FreeLLMAPI configuration and provider limits.
+
+The setup script requires a compatible 64-bit Linux userspace and network access. Android battery management, Termux permissions, device architecture, upstream installer changes, and provider limits may affect operation. Do not paste the unified key into ChatGPT or commit it to the repository.

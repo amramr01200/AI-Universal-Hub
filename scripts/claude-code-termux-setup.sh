@@ -3,7 +3,7 @@
 # Installs the official Claude Code CLI inside Ubuntu's glibc environment.
 set -Eeuo pipefail
 
-PREFIX="\${PREFIX:-/data/data/com.termux/files/usr}"
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu"
 
 if ! command -v pkg >/dev/null 2>&1; then
@@ -99,6 +99,10 @@ else
 fi
 
 echo
+if [ ! -d "$HOME/AI-Universal-Hub/.git" ]; then
+  git clone --branch feature/claude-code-termux https://github.com/amramr01200/AI-Universal-Hub.git "$HOME/AI-Universal-Hub"
+fi
+
 echo "Setup complete. Start with:"
 echo "  proot-distro login ubuntu"
 echo "  claude"

@@ -10,7 +10,7 @@ AI Universal Hub is now focused on one primary workflow: run the **official Clau
 - The app stores the unified key using AndroidX encrypted preferences. During setup, it transfers the key to Debian's private Claude configuration directory with file permissions restricted to the Debian user.
 - The default FreeLLMAPI origin is `http://127.0.0.1:3001`. Claude Code receives `ANTHROPIC_BASE_URL` (without `/v1`) and `ANTHROPIC_AUTH_TOKEN`, then calls the Anthropic Messages API path `/v1/messages`.
 - Setup checks the authenticated `/v1/models` endpoint before reporting that the gateway is reachable. Actual Claude Code requests still require FreeLLMAPI to route Anthropic Messages API requests correctly.
-- The project is cloned into `/home/claudeuser/AI-Universal-Hub` inside Debian by the setup flow. The project directory can be changed in the app.
+- The active `feature/claude-code-freellmapi-termux` project branch is cloned into `/home/claudeuser/AI-Universal-Hub` inside Debian by the setup flow. The project directory can be changed in the app.
 - Each chat request invokes the real Claude Code CLI in print mode and returns its completed output to the in-app chat. Claude Code's CLI session ID is retained between prompts.
 - File read/edit tools are enabled for the coding agent. Shell-command access is off by default and can be explicitly enabled in the app for a task.
 

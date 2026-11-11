@@ -173,7 +173,7 @@ fun ClaudeCodeScreen(isArabic: Boolean, modifier: Modifier = Modifier) {
                       curl -fsSL https://claude.ai/install.sh | bash
                     fi
                     if [ ! -d "${'$'}HOME/AI-Universal-Hub/.git" ]; then
-                      git clone --single-branch --branch main https://github.com/amramr01200/AI-Universal-Hub.git "${'$'}HOME/AI-Universal-Hub"
+                      git clone --single-branch --branch feature/claude-code-freellmapi-termux https://github.com/amramr01200/AI-Universal-Hub.git "${'$'}HOME/AI-Universal-Hub"
                     fi
                     base_url="$(cat "${'$'}HOME/.config/claude-code-free/base-url")"
                     token="$(cat "${'$'}HOME/.config/claude-code-free/token")"
@@ -202,7 +202,7 @@ fun ClaudeCodeScreen(isArabic: Boolean, modifier: Modifier = Modifier) {
                 if (result == null) {
                     status = if (isArabic) "انتهت مهلة التثبيت. افتحي Termux وتحققي من آخر خطأ." else "Setup timed out. Check the last error in Termux."
                 } else if (result.exitCode == 0 && result.errorCode == 0) {
-                    status = if (isArabic) "تم تجهيز Claude Code والاتصال بـ FreeLLMAPI بنجاح." else "Claude Code installed and FreeLLMAPI connection verified."
+                    status = if (isArabic) "تم تثبيت Claude Code والتحقق من استجابة FreeLLMAPI للمفتاح الموحد." else "Claude Code installed and FreeLLMAPI connection verified."
                 } else {
                     status = (result.errorMessage + "\n" + result.stderr + "\n" + result.stdout).trim().takeLast(2500)
                         .ifBlank { "Setup failed (exit ${result.exitCode})." }

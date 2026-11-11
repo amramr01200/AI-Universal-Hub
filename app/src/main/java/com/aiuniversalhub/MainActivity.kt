@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.TextStyle
 import com.aiuniversalhub.chat.ChatHomeScreen
 import com.aiuniversalhub.data.SecureStore
+import com.aiuniversalhub.integrations.ClaudeCodeSetupScreen
 import com.aiuniversalhub.integrations.GitHubAgentScreen
 import com.aiuniversalhub.integrations.McpHttpClient
 import com.aiuniversalhub.registry.ToolLibraryScreen
@@ -100,7 +101,8 @@ fun HubApp() {
             if (secureStore.getProviderUrl("mcp-server").isNotBlank()) "Configured" else "Ready to configure",
             if (secureStore.getProviderUrl("mcp-server").isNotBlank()) "تم حفظ خادم" else "جاهز للإعداد"),
         ToolCard("litellm", "LiteLLM", "Unified gateway for supported AI providers", "بوابة موحدة لمزودي الذكاء الاصطناعي",
-            "Integration planned", "التكامل قيد التطوير")
+            "Integration planned", "التكامل قيد التطوير"),
+        ToolCard("claude-code", "Claude Code", "Coding agent routed through your FreeLLMAPI unified key", "وكيل برمجة يتصل بالمفتاح الموحّد في FreeLLMAPI", "Termux setup available", "إعداد Termux متاح")
     )
 
     val hubColors = darkColorScheme(
@@ -182,6 +184,7 @@ fun HubApp() {
                                 DropdownMenuItem(text = { Text(if (isArabic) "إعدادات الذكاء الاصطناعي" else "AI settings") }, onClick = { selectedTab = 0; requestChatAiSettings = true; showHubMenu = false })
                                 DropdownMenuItem(text = { Text(if (isArabic) "تغيير اللغة" else "Change language") }, onClick = { isArabic = !isArabic; showHubMenu = false })
                                 DropdownMenuItem(text = { Text(if (isArabic) "مركز الأدوات" else "Tools Center") }, onClick = { selectedTab = 1; showHubMenu = false })
+                                DropdownMenuItem(text = { Text("Claude Code") }, onClick = { selectedTab = 6; showHubMenu = false })
                             }
                         }
                     }
@@ -259,7 +262,7 @@ fun HubApp() {
                                                     }) { Text(if (isArabic) "عرض صفحة التثبيت" else "Open install page") }
                                                 }
                                             }
-                                            else -> OutlinedButton(onClick = { selectedTool = tool }) {
+                                            else -> OutlinedButton(onClick = { if (tool.id == "claude-code") selectedTab = 6 else selectedTool = tool }) {
                                                 Text(if (isArabic) "فتح إعدادات الأداة" else "Open tool setup")
                                             }
                                         }
@@ -372,6 +375,10 @@ fun HubApp() {
 
                         5 -> Box(modifier = Modifier.fillMaxSize()) {
                             RuntimeCenterScreen(isArabic = isArabic, activeConversationId = activeConversationId)
+                        }
+
+                        6 -> Box(modifier = Modifier.fillMaxSize()) {
+                            ClaudeCodeSetupScreen(isArabic = isArabic)
                         }
                     }
                 }

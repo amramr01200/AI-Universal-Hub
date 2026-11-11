@@ -22,15 +22,15 @@ object ClaudeCodeLauncher {
 
     fun openSetup(context: Context): Result = openTerminal(
         context,
-        "if [ ! -d \"$HOME/AI-Universal-Hub/.git\" ]; then " +
+        "if [ ! -d \"\$HOME/AI-Universal-Hub/.git\" ]; then " +
             "pkg install -y git && git clone --branch feature/claude-code-termux " +
-            "https://github.com/amramr01200/AI-Universal-Hub.git \"$HOME/AI-Universal-Hub\"; fi; " +
-            "bash \"$HOME/AI-Universal-Hub/scripts/claude-code-termux-setup.sh\""
+            "https://github.com/amramr01200/AI-Universal-Hub.git \"\$HOME/AI-Universal-Hub\"; fi; " +
+            "bash \"\$HOME/AI-Universal-Hub/scripts/claude-code-termux-setup.sh\""
     )
 
     fun openClaudeCode(context: Context): Result = openTerminal(
         context,
-        "proot-distro login ubuntu -- bash -lc 'cd \"$HOME/AI-Universal-Hub\" 2>/dev/null || cd \"$HOME\"; exec claude'"
+        "proot-distro login ubuntu -- bash -lc 'cd \"\$HOME/AI-Universal-Hub\" 2>/dev/null || cd \"\$HOME\"; exec claude'"
     )
 
     private fun openTerminal(context: Context, command: String): Result {

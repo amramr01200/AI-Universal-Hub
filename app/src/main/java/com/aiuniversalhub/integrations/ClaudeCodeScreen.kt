@@ -164,31 +164,31 @@ fun ClaudeCodeScreen(isArabic: Boolean, modifier: Modifier = Modifier) {
                 """.trimIndent()
                 val userScript = """
                     set -e
-                    export PATH="${'HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"}HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-                    install -d -m 700 "${'HOME/.config/claude-code-free"}HOME/.config/claude-code-free"
-                    printf '%s' '$keyEncoded' | base64 -d > "${'HOME/.config/claude-code-free/token"}HOME/.config/claude-code-free/token"
-                    printf '%s' '$baseEncoded' | base64 -d > "${'HOME/.config/claude-code-free/base-url"}HOME/.config/claude-code-free/base-url"
-                    chmod 600 "${'HOME/.config/claude-code-free/token" "${'$' }HOME/.config/claude-code-free/base-url"}HOME/.config/claude-code-free/token" "${'$' }HOME/.config/claude-code-free/base-url"
-                    if [ ! -x "${'HOME/.local/bin/claude" ]; then}HOME/.local/bin/claude" ]; then
+                    export PATH="${'$'}HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+                    install -d -m 700 "${'$'}HOME/.config/claude-code-free"
+                    printf '%s' '$keyEncoded' | base64 -d > "${'$'}HOME/.config/claude-code-free/token"
+                    printf '%s' '$baseEncoded' | base64 -d > "${'$'}HOME/.config/claude-code-free/base-url"
+                    chmod 600 "${'$'}HOME/.config/claude-code-free/token" "${'$'}HOME/.config/claude-code-free/base-url"
+                    if [ ! -x "${'$'}HOME/.local/bin/claude" ]; then
                       curl -fsSL https://claude.ai/install.sh | bash
                     fi
-                    if [ ! -d "${'HOME/AI-Universal-Hub/.git" ]; then}HOME/AI-Universal-Hub/.git" ]; then
-                      git clone --single-branch --branch main https://github.com/amramr01200/AI-Universal-Hub.git "${'HOME/AI-Universal-Hub"}HOME/AI-Universal-Hub"
+                    if [ ! -d "${'$'}HOME/AI-Universal-Hub/.git" ]; then
+                      git clone --single-branch --branch main https://github.com/amramr01200/AI-Universal-Hub.git "${'$'}HOME/AI-Universal-Hub"
                     fi
-                    base_url="$(cat "${'HOME/.config/claude-code-free/base-url")"}HOME/.config/claude-code-free/base-url")"
-                    token="$(cat "${'HOME/.config/claude-code-free/token")"}HOME/.config/claude-code-free/token")"
-                    code="$(curl -sS -o /dev/null -w '%{http_code}' "${'base_url/v1/models" -H "Authorization: Bearer ${'$' }token" || true)"}base_url/v1/models" -H "Authorization: Bearer ${'token" || true)"}token" || true)"
-                    if [ "${'code" != "200" ]; then}code" != "200" ]; then
-                      echo "FreeLLMAPI check failed: HTTP ${'code. Check that the server is running and the unified key is valid."}code. Check that the server is running and the unified key is valid."
+                    base_url="$(cat "${'$'}HOME/.config/claude-code-free/base-url")"
+                    token="$(cat "${'$'}HOME/.config/claude-code-free/token")"
+                    code="$(curl -sS -o /dev/null -w '%{http_code}' "${'$'}base_url/v1/models" -H "Authorization: Bearer ${'$'}token" || true)"
+                    if [ "${'$'}code" != "200" ]; then
+                      echo "FreeLLMAPI check failed: HTTP ${'$'}code. Check that the server is running and the unified key is valid."
                       exit 1
                     fi
-                    "${'HOME/.local/bin/claude" --version}HOME/.local/bin/claude" --version
+                    "${'$'}HOME/.local/bin/claude" --version
                 """.trimIndent()
                 val rootEncoded = b64(rootScript)
                 val userEncoded = b64(userScript)
                 val command =
                     "proot-distro list-installed | grep -qi debian || proot-distro install debian; " +
-                    "proot-distro login debian -- bash -lc 'eval \"\\$(printf %s $rootEncoded | base64 -d)\"' && " +
+                    "proot-distro login debian -- bash -lc 'eval \"$(printf %s $rootEncoded | base64 -d)\"' && " +
                     "proot-distro login debian --user claudeuser -- bash -lc 'eval \"\$(printf %s $userEncoded | base64 -d)\"'"
                 val label = "claude-setup:" + UUID.randomUUID()
                 val submitted = withContext(Dispatchers.IO) {
@@ -247,17 +247,17 @@ fun ClaudeCodeScreen(isArabic: Boolean, modifier: Modifier = Modifier) {
         val tools = if (allowShell) "Read,Glob,Grep,Edit,Write,Bash" else "Read,Glob,Grep,Edit,Write"
         val runScript = """
             set -e
-            export PATH="${'HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"}HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-            export ANTHROPIC_BASE_URL="$(cat "${'HOME/.config/claude-code-free/base-url")"}HOME/.config/claude-code-free/base-url")"
-            export ANTHROPIC_AUTH_TOKEN="$(cat "${'HOME/.config/claude-code-free/token")"}HOME/.config/claude-code-free/token")"
+            export PATH="${'$'}HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+            export ANTHROPIC_BASE_URL="$(cat "${'$'}HOME/.config/claude-code-free/base-url")"
+            export ANTHROPIC_AUTH_TOKEN="$(cat "${'$'}HOME/.config/claude-code-free/token")"
             unset ANTHROPIC_API_KEY
             cd "$(printf '%s' '$directoryEncoded' | base64 -d)"
             PROMPT="$(printf '%s' '$promptEncoded' | base64 -d)"
-            exec "${'HOME/.local/bin/claude" -p --output-format text --permission-mode acceptEdits --allowedTools "$tools" $sessionFlag "$sessionId" "${'$' }PROMPT"}HOME/.local/bin/claude" -p --output-format text --permission-mode acceptEdits --allowedTools "$tools" $sessionFlag "$sessionId" "${'PROMPT"}PROMPT"
+            exec "${'$'}HOME/.local/bin/claude" -p --output-format text --permission-mode acceptEdits --allowedTools "$tools" $sessionFlag "$sessionId" "${'$'}PROMPT"
         """.trimIndent()
         val encodedScript = b64(runScript)
         val command =
-            "proot-distro login debian --user claudeuser -- bash -lc 'eval \"\\$(printf %s $encodedScript | base64 -d)\"'"
+            "proot-distro login debian --user claudeuser -- bash -lc 'eval \"$(printf %s $encodedScript | base64 -d)\"'"
         val label = "claude-chat:" + UUID.randomUUID()
         chatLines.add(ClaudeChatLine("user", cleanPrompt))
         prompt = ""

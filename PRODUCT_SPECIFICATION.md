@@ -203,3 +203,26 @@ The Hub should provide a dedicated Claude Code workspace that can be launched fr
 - Start Claude Code from the Hub, open the correct linked conversation, send a prompt, stream the response, and resume the same session after closing/reopening the app.
 - Verify credential secrecy, project-directory scoping, permission prompts, command cancellation, process failure, timeout, network loss, and audit records.
 
+## 20. Product direction update — Claude Code is the primary experience
+
+This update supersedes the broad multi-tool showcase direction for the primary user experience.
+
+- The main product is Claude Code running as the coding agent inside AI Universal Hub. Do not build a large collection of unrelated tools, competing agents, or a crowded model catalogue as the primary workflow.
+- Keep only the supporting components required to run Claude Code: the Termux runtime bridge, Node.js/npm prerequisite, Claude Code CLI, a small compatible-provider router, encrypted credential storage, project workspace access, GitHub integration, and only MCP servers explicitly enabled for the active project.
+- The UI should foreground one Claude Code session and its current provider/model, runtime status, project, task output, approval requests, and remaining provider quota when the provider actually exposes it. Keep advanced provider and runtime settings behind the existing settings surface.
+- Allow the user to register several API credentials and compatible upstreams behind one Claude Code gateway profile. The gateway may choose a healthy configured credential or perform a documented fallback only when the credential belongs to the same authorized provider/account policy and the provider permits it. Keep per-key usage, provider identity, limits, and errors separate and visible.
+- Never combine credits from unrelated accounts into a fictitious balance, bypass per-key or per-account quotas, rotate identities to evade rate limits, or retry a rejected request through another account to defeat provider restrictions. On quota/rate-limit responses, honor Retry-After and provider policy; switch only to a separately authorized provider/model when the user has enabled that fallback.
+- A credential can be used by Claude Code only if its endpoint implements the Anthropic Messages API behavior Claude Code requires, or is routed through a reviewed protocol adapter that correctly translates the required request, streaming, tool-use, and response semantics. OpenAI-compatible chat-completions support alone is insufficient.
+- Prefer a short, curated set of providers that pass the Claude Code compatibility test. Do not automatically add every model discovered by a provider to the Claude Code selector.
+- The user-supplied reference URL https://ikhtiardhaki.com/v/claude-code-free is an optional candidate integration reference only. Its contents and safety have not been verified. Do not execute remote scripts, install packages, or send credentials to it until its source, code, endpoint behavior, ownership, privacy policy, and provider terms have been reviewed and explicitly approved.
+- Preserve existing provider records and encrypted credentials during migration. Do not import or reuse any API keys from the previously uploaded plaintext JSON; require the user to revoke exposed keys and enter replacement credentials directly into encrypted app storage.
+
+### Acceptance criteria for the focused Claude Code experience
+- The app opens directly into a Claude Code workspace, not a generic tool marketplace.
+- A single health check reports Termux, Node.js, npm, Claude Code CLI, selected gateway, and selected model readiness independently.
+- The user can choose one default compatible provider/model and optionally enable explicitly authorized fallbacks.
+- All credential use is auditable without logging or displaying secret values.
+- Rate limits and remaining quota are provider-reported, never inferred by summing unrelated keys.
+- An incompatible provider is clearly disabled for Claude Code and is not silently translated or selected.
+- Project file changes, shell commands, Git operations, installs, and MCP actions remain subject to visible user approval.
+

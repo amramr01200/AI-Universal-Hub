@@ -158,6 +158,45 @@ fun RuntimeCenterScreen(isArabic: Boolean, activeConversationId: Int = -1) {
 
     LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
+            Card {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Claude Code", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        if (isArabic)
+                            "مساحة البرمجة الأساسية. يعمل Claude Code داخل Ubuntu على Termux؛ افتحي جلسة مرئية لإكمال الإعداد أو متابعة العمل مع تأكيد صلاحياته."
+                        else
+                            "Primary coding workspace. Claude Code runs in Ubuntu under Termux; open a visible session for setup or coding with permission prompts enabled.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        enabled = termuxInstalled && runCommandGranted,
+                        onClick = {
+                            val result = ClaudeCodeLauncher.openSetup(context)
+                            status = result.message
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isArabic) "تثبيت وإعداد Claude Code" else "Install & configure Claude Code")
+                    }
+                    OutlinedButton(
+                        enabled = termuxInstalled && runCommandGranted,
+                        onClick = {
+                            val result = ClaudeCodeLauncher.openClaudeCode(context)
+                            status = result.message
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isArabic) "فتح Claude Code" else "Open Claude Code")
+                    }
+                    Text(
+                        if (isArabic) "يحتاج Termux وإذن RUN_COMMAND. تشغيل Android تجريبي عبر Ubuntu (proot)، وليس دعمًا رسميًا من Anthropic."
+                        else "Requires Termux and RUN_COMMAND permission. Android execution is experimental via Ubuntu (proot), not officially supported by Anthropic.",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+        item {
             Text(if (isArabic) "بيئة التشغيل والحزم" else "Runtime & Packages", style = MaterialTheme.typography.headlineSmall)
             Text(if (isArabic) "إدارة ملفات ربط الوكلاء بالمحادثات. حفظ الربط لا يعني أن Termux متصل ثنائي الاتجاه؛ يلزم إعداد الجسر على الجهاز." else "Manage agent profiles linked to chat IDs. Saving a profile does not create a live two-way Termux connection; the device bridge must also be configured.")
         }

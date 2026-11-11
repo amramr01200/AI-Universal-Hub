@@ -30,7 +30,7 @@ object ClaudeCodeLauncher {
 
     fun openClaudeCode(context: Context): Result = openTerminal(
         context,
-        "proot-distro login ubuntu -- bash -lc 'cd \"\$HOME/AI-Universal-Hub\" 2>/dev/null || cd \"\$HOME\"; exec claude'"
+        "proot-distro login ubuntu --user hub -- bash -lc 'cd \"\$HOME/AI-Universal-Hub\" 2>/dev/null || cd \"\$HOME\"; exec claude'"
     )
 
     private fun openTerminal(context: Context, command: String): Result {

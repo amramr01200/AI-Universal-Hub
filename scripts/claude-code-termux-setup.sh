@@ -44,7 +44,7 @@ if [ ! -d "$HUB_HOME/AI-Universal-Hub/.git" ]; then
   su - hub -s /bin/bash -c 'git clone --branch feature/claude-code-termux https://github.com/amramr01200/AI-Universal-Hub.git "$HOME/AI-Universal-Hub"'
 fi
 
-if ! su - hub -s /bin/bash -c 'command -v claude >/dev/null 2>&1'; then
+if ! su - hub -s /bin/bash -c 'export PATH="$HOME/.local/bin:$PATH"; command -v claude >/dev/null 2>&1'; then
   echo "Installing Claude Code with Anthropic's official installer for the unprivileged 'hub' user..."
   curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh
   chown hub:hub /tmp/claude-install.sh
@@ -52,13 +52,13 @@ if ! su - hub -s /bin/bash -c 'command -v claude >/dev/null 2>&1'; then
   rm -f /tmp/claude-install.sh
 fi
 
-if ! su - hub -s /bin/bash -c 'command -v claude >/dev/null 2>&1'; then
+if ! su - hub -s /bin/bash -c 'export PATH="$HOME/.local/bin:$PATH"; command -v claude >/dev/null 2>&1'; then
   echo "Claude Code command was not found after installation."
   exit 2
 fi
 
 echo
-su - hub -s /bin/bash -c 'claude --version'
+su - hub -s /bin/bash -c 'export PATH="$HOME/.local/bin:$PATH"; claude --version'
 echo
 echo "Optional provider setup:"
 echo "- Leave base URL blank for Anthropic's official endpoint."

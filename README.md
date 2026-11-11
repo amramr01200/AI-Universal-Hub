@@ -68,3 +68,10 @@ The intended provider pool is deliberately small and compatibility-tested. Multi
 
 **Current milestone:** requirements and product direction documented on the `feature/claude-code-termux` branch. No successful Claude Code installation, Termux execution test, compatible gateway test, or APK build is claimed yet.
 
+
+
+## Claude Code runtime milestone
+
+A Termux setup entry is now available at [docs/CLAUDE_CODE_ANDROID.md](docs/CLAUDE_CODE_ANDROID.md). It uses Ubuntu through proot-distro as a community compatibility layer, then installs the official Claude Code CLI. The app Runtime Center now has buttons to open the visible Termux setup and Claude Code sessions. Provider credentials are entered interactively and stored in the Ubuntu user's private Claude settings file, not in Git.
+
+This remains experimental on Android. The embedded in-app terminal/PTY and live bidirectional chat streaming are not implemented yet. Do not treat OpenAI-compatible chat-completions endpoints as Claude Code-compatible; only use an Anthropic Messages-compatible endpoint or a reviewed protocol gateway.

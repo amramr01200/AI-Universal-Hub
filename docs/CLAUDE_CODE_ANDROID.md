@@ -1,53 +1,66 @@
 # Claude Code on Android (Termux + Ubuntu)
 
-This is the first executable runtime milestone for AI Universal Hub.
+This is an experimental Android compatibility route for the official Claude Code CLI. Android/Termux is not an officially supported Claude Code platform.
 
-## Why Ubuntu inside Termux?
+## Runtime design
 
-Current Claude Code releases use Linux binaries that expect glibc. Plain Termux uses Android's Bionic libc, so a normal npm install can leave a non-runnable launcher on current releases. This project therefore uses proot-distro with Ubuntu as a compatibility environment. This is a community workaround, not an Anthropic-supported Android target.
+- Termux is the Android-side launcher and terminal host.
+- Ubuntu runs inside Termux through proot-distro to provide a glibc-based Linux userspace.
+- Claude Code is installed as the unprivileged Ubuntu user `hub`, not as root.
+- The Android app opens a visible Termux terminal. Interactive prompts and Claude Code permission confirmations remain visible to the user.
+- The app Runtime Center is intentionally focused on Claude Code; generic model scanning and unrelated package catalogs are not part of this workspace.
 
 ## Install
 
-1. Install Termux from a maintained source (F-Droid or the official Termux GitHub releases; avoid the obsolete Play Store build).
-2. Open Termux and run:
+1. Install a maintained Termux build and open it.
+2. In Termux, enable **Allow external apps** in Termux settings. The Android app also needs the Termux RUN_COMMAND permission.
+3. Open AI Universal Hub and choose **Install & configure Claude Code**, or run the setup script from a Termux checkout:
 
+   ```bash
    pkg install -y git
-   git clone https://github.com/amramr01200/AI-Universal-Hub.git
+   git clone --branch feature/claude-code-termux https://github.com/amramr01200/AI-Universal-Hub.git
    cd AI-Universal-Hub
    bash scripts/claude-code-termux-setup.sh
+   ```
 
-3. The script asks before installing Ubuntu, then installs curl, git and Python inside Ubuntu and downloads Anthropic's installer from https://claude.ai/install.sh.
-4. At the optional provider prompt:
-   - Leave the base URL blank for the official Anthropic endpoint.
-   - Only enter a gateway URL if it implements the Anthropic Messages API expected by Claude Code.
-   - Enter the provider token at the hidden prompt. It is saved only inside Ubuntu at ~/.claude/settings.json, with restrictive file permissions (0600). It is never written to this repository.
-   - A provider that only exposes OpenAI /v1/chat/completions is not compatible without a separately configured protocol gateway.
-5. Start:
+4. Approve the Ubuntu installation. The script installs the Ubuntu userspace, creates a non-root `hub` user, clones the project into that user's home directory, and runs Anthropic's official installer for Claude Code.
+5. At the optional provider prompt:
+   - Leave the base URL blank to use Anthropic's normal endpoint.
+   - Enter a base URL only if the provider implements the Anthropic Messages API expected by Claude Code.
+   - An OpenAI `/v1/chat/completions` endpoint alone is not compatible.
+   - The API token is entered at a hidden prompt and saved in `/home/hub/.claude/settings.json` with mode 0600. It is not written to Git or Android app logs.
+6. Start from the app with **Launch Claude Code**, or manually:
 
-   proot-distro login ubuntu
-   claude --version
+   ```bash
+   proot-distro login ubuntu --user hub
+   cd ~/AI-Universal-Hub
    claude
+   ```
 
-   To work on a repository, enter its directory inside Ubuntu before starting Claude Code.
+## Provider and credential rules
 
-## Provider and key handling
+- Configure one active Anthropic-compatible provider endpoint/token for this Claude Code profile.
+- Do not merge separate accounts' quotas into a fake shared balance or rotate credentials to evade provider limits.
+- A legitimate gateway may perform provider routing only within its terms and only if it implements the Anthropic Messages API and tool-use behavior.
+- Never commit API keys or paste them into chat, GitHub issues, or shell command arguments.
+- Any credentials previously exposed in an uploaded JSON bundle must be revoked and replaced before use.
 
-- One active provider endpoint/token is configured for this Claude Code profile. Multiple unrelated keys are not combined into a synthetic balance and are not rotated to evade provider quotas.
-- A gateway may provide legitimate routing/fallback only within its documented terms and only when it speaks the Anthropic Messages API.
-- Never commit API keys, paste them into GitHub issues, or place them in shell command arguments/history.
-- If a key was previously exposed in an uploaded JSON file, revoke it and create a replacement before use.
-- Third-party setup pages and installers are not executed automatically. The user-provided ikhtiardhaki.com/v/claude-code-free page could not be retrieved for review; no code or key should be sent to it until its exact contents and trustworthiness are verified.
+## Free-Pi link clarification
 
-## Current limitation
+The supplied link describes Free-Pi, a separate Pi-based coding agent. It is not Claude Code and does not use the user's API keys; its requests go through Free-Pi's own service and account. It is not part of this Claude Code runtime.
 
-This script installs and configures the CLI in Termux's Ubuntu environment. It does not yet provide an embedded interactive terminal or live bidirectional streaming inside the Android chat screen. The existing app bridge currently submits background commands and receives completed output; it is not a PTY. The next app milestone must add an explicit terminal/session transport before claiming in-chat interactive Claude Code.
+## Current limitations
 
-## Recovery
+- This is an experimental Android/proot compatibility route and must be tested on the target phone.
+- The app opens a visible Termux terminal; it does not yet embed an interactive PTY or stream Claude Code's live session into the Hub chat.
+- A successful CI APK build does not prove that Claude Code has installed or run on the user's device.
+- Do not disable Claude Code permission prompts or run the CLI with permission bypass flags.
 
-- Enter Ubuntu: proot-distro login ubuntu
-- Check CLI: claude --version
-- Check environment: claude doctor
-- Update CLI: claude update
-- Remove Ubuntu only if you intentionally want to erase that Linux environment: proot-distro remove ubuntu
+## Recovery and diagnostics
 
-Do not run the removal command as part of routine maintenance.
+- Enter Ubuntu as the Claude Code user: `proot-distro login ubuntu --user hub`
+- Check CLI version: `claude --version`
+- Run diagnostics: `claude doctor`
+- Update CLI: `claude update`
+
+Do not remove the Ubuntu environment as part of routine maintenance; that would erase the installed runtime and user configuration.

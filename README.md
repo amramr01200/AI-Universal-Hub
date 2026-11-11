@@ -57,3 +57,28 @@ Docker is listed as a compatibility target, not a native Android package: a conv
 ## Canonical product and design specification
 
 The complete approved requirements, including the golden-gear identity, black-and-gold app shell, white chat workspace, Arabic/English support, providers, routing, tools, MCP, GitHub agent, runtime management, Chrome workflows, background continuity, security, and acceptance tests are maintained in [`PRODUCT_SPECIFICATION.md`](PRODUCT_SPECIFICATION.md). This specification is the source of truth for implementation and must not be reduced to the currently implemented feature set.
+
+## Claude Code-first integration status
+
+The active development direction is a focused Claude Code workspace inside the Android app, using Termux as its helper runtime. The current repository contains a Termux command bridge foundation, encrypted provider-key storage, provider chat support for OpenAI-compatible endpoints, and a runtime catalog. These pieces do **not** yet constitute a verified Claude Code launcher or a working Anthropic Messages gateway.
+
+Claude Code routing requires an Anthropic Messages-compatible endpoint or a reviewed protocol gateway. An OpenAI-compatible `/chat/completions` endpoint is not sufficient by itself. Provider credentials must remain encrypted and must never be placed in Git, chat transcripts, shell history, process arguments, or diagnostic logs.
+
+The intended provider pool is deliberately small and compatibility-tested. Multiple credentials may be used for authorized availability/fallback only where provider terms permit; quotas and credits must not be merged across unrelated accounts or bypassed. The user-provided third-party reference URL is unverified and must not be executed or receive credentials until reviewed.
+
+**Current milestone:** requirements and product direction documented on the `feature/claude-code-termux` branch. No successful Claude Code installation, Termux execution test, compatible gateway test, or APK build is claimed yet.
+
+
+
+## Claude Code runtime milestone
+
+A Termux setup entry is now available at [docs/CLAUDE_CODE_ANDROID.md](docs/CLAUDE_CODE_ANDROID.md). It uses Ubuntu through proot-distro as a community compatibility layer, then installs the official Claude Code CLI. The app Runtime Center now has buttons to open the visible Termux setup and Claude Code sessions. Provider credentials are entered interactively and stored in the Ubuntu user's private Claude settings file, not in Git.
+
+This remains experimental on Android. The embedded in-app terminal/PTY and live bidirectional chat streaming are not implemented yet. Do not treat OpenAI-compatible chat-completions endpoints as Claude Code-compatible; only use an Anthropic Messages-compatible endpoint or a reviewed protocol gateway.
+
+
+## Claude Code-first Android workspace
+
+The Runtime Center is focused on the Claude Code workflow instead of exposing the earlier broad model/utility scan. The setup script creates an unprivileged Ubuntu user inside proot-distro and installs the official Claude Code CLI there. The app launches a visible Termux session so interactive authentication and permission confirmations remain under the user's control.
+
+The supplied Free-Pi link describes a separate Pi-based coding agent, not Claude Code, and is not integrated into the Claude Code runtime. See [the Android setup guide](docs/CLAUDE_CODE_ANDROID.md) for compatibility limits and provider requirements.

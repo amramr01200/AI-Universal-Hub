@@ -3,9 +3,8 @@
 # Claude Code runs as an unprivileged Ubuntu user, not root.
 set -Eeuo pipefail
 
-PREFIX="\${PREFIX:-/data/data/com.termux/files/usr}"
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/ubuntu"
-BOOTSTRAP="$HOME/AI-Universal-Hub-claude-bootstrap"
 
 if ! command -v pkg >/dev/null 2>&1; then
   echo "Run this script inside Termux, not Android shell."

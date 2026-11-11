@@ -2,6 +2,8 @@ name: Build Android APK
 
 on:
   push:
+    branches: [ main, feature/claude-code-termux ]
+  pull_request:
     branches: [ main ]
   workflow_dispatch:
 
@@ -29,6 +31,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Validate Claude Code setup script
+        run: bash -n scripts/claude-code-termux-setup.sh
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Upload APK artifact
@@ -39,6 +43,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Publish direct APK download (no password / no extraction)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-apk

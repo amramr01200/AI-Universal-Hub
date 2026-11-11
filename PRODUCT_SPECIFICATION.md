@@ -161,3 +161,45 @@ Manage compatible execution environments for Python, pip, uv, Node.js/npm, Git, 
 - Show which models can continue the project within budget, which may need summarization/compaction or file selection, and which cannot proceed due to context, quota, capability, or connectivity limits. Explain the reason and let the user choose; never silently discard project context or switch models.
 - Some providers expose only per-request usage, some expose account credits/quota, and some expose neither. If unavailable, show 'غير متاح من المزود' / 'Not exposed by provider' rather than inventing a number.
 - Acceptance checks: verify counts update after messages and file attachments; distinguish context capacity from account quota; compare models for continuing the same project; label estimates; never fabricate unavailable quota; verify refresh after provider responses.
+
+## 19. Claude Code integration through the Termux runtime — approved feature
+
+The Hub should provide a dedicated Claude Code workspace that can be launched from inside the Android app and linked to a persistent Hub conversation. This is a real CLI integration, not a web-page shortcut or a generic chat label.
+
+### Runtime and compatibility
+- Treat Termux as an explicitly configured helper runtime. Detect Node.js/npm and Claude Code availability before showing the feature as ready.
+- Claude Code's documented installation/runtime requirements must be checked against the installed Termux environment. Android/Termux is not listed as an officially supported operating system in Anthropic's published system requirements; therefore the app must label it experimental until the actual device passes installation and runtime tests.
+- Support the documented CLI installation path only after showing the package, source, required storage, and user approval. Do not silently install or update packages.
+- Keep the Claude Code CLI version and runtime status visible, with test, install, update, start, stop, and diagnostic actions.
+
+### Provider and protocol routing
+- Add a dedicated Claude Code provider adapter using the Anthropic Messages API contract.
+- Configure the CLI through supported environment settings such as ANTHROPIC_BASE_URL and the appropriate authentication variable. Keep model IDs and endpoint paths provider-specific; do not assume an OpenAI-compatible /chat/completions endpoint can serve Claude Code.
+- A provider may be selected for Claude Code only after a compatibility test confirms the required Anthropic Messages API behavior, streaming, tool-use request/response format, and model-name mapping.
+- If FreeLLMAPI exposes only OpenAI-compatible endpoints, use a separately configured, reviewed protocol-translation gateway; otherwise mark it incompatible for Claude Code instead of claiming it works.
+- Preserve provider/model choice per Claude Code profile and conversation. Never silently route to another model or provider.
+- Do not represent a third-party model as an Anthropic Claude model. Clearly show the actual upstream provider and model.
+
+### Credentials and privacy
+- Keep provider credentials in the Hub's encrypted credential store. Never commit them, include them in exported project files, place them in chat history, or print them in logs.
+- Do not pass long-lived credentials in shell command text, command-line arguments, or broadcast extras. The bridge must use a short-lived, narrowly scoped handoff or a local authenticated channel with explicit pairing.
+- Do not import credentials from the uploaded provider bundle unless the user has rotated any exposed keys and explicitly re-enters the replacement credentials into secure storage.
+- Use only legitimate provider access and quotas; do not bypass account limits, subscription checks, or provider authentication.
+
+### In-app conversation and project workspace
+- Launch Claude Code from the Hub into a dedicated conversation associated with a selected project directory.
+- Stream CLI events and final responses back into the Hub conversation; persist session identifiers and profile-to-conversation mappings so users can resume the same session.
+- Scope file access to the selected project workspace. Show the active working directory and the files the agent can access.
+- Require user approval for file edits, shell commands, installs, repository writes, and other consequential operations. Provide a visible diff/action summary before applying changes where practical.
+- Never start the CLI with permission prompts disabled. Keep permission checks enabled and make denied actions visible in the conversation.
+- Provide bounded execution time, output limits, cancellation, pause/reconnect behavior, and recoverable task state. Do not claim a background task continues unless the process and its status are verified.
+- Integrate MCP servers only through the Hub's reviewed MCP configuration and permission flow; do not inherit unknown global MCP configuration without showing it to the user.
+
+### Acceptance tests
+- Install or detect Node.js and Claude Code in the configured Termux environment and run a version/diagnostic check.
+- Verify whether the actual device/Termux version is compatible; clearly report unsupported or failed states.
+- Test one Anthropic Messages-compatible provider and one OpenAI-only provider; the latter must be rejected or routed through an explicitly configured translator.
+- Verify FreeLLMAPI only after protocol and tool-use compatibility tests pass.
+- Start Claude Code from the Hub, open the correct linked conversation, send a prompt, stream the response, and resume the same session after closing/reopening the app.
+- Verify credential secrecy, project-directory scoping, permission prompts, command cancellation, process failure, timeout, network loss, and audit records.
+

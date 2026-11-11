@@ -1,6 +1,8 @@
 name: Build Android APK
 
 on:
+  pull_request:
+    branches: [ main ]
   push:
     branches: [ main ]
   workflow_dispatch:
@@ -39,6 +41,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Publish direct APK download (no password / no extraction)
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-apk
